@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 
 use crate::{
     helper::UPSafeCell,
-    task::Task,
+    task::{TTaskClear, Task, task_id::TaskId},
     timer::{PriorityTimerQueue, Timer},
 };
 
@@ -19,7 +19,7 @@ lazy_static! {
 #[derive(Default)]
 pub struct Runtime {
     // 尚在运行中的任务
-    running_tasks: HashSet<*const ()>,
+    running_tasks: HashSet<TaskId>,
 
     // 等待被唤醒的Waker
     ready_wakers: VecDeque<Waker>,
@@ -53,14 +53,25 @@ pub(crate) fn wait() {
     }
 }
 
+struct RuntimeTaskClear {
+    tid: TaskId,
+}
+
+impl TTaskClear for RuntimeTaskClear {
+    fn clear(&self) {
+        log::trace!("remove task {}", self.tid.as_ref());
+        RUNTIME.get_mut().running_tasks.remove(&self.tid);
+    }
+}
+
 // 提交一个任务。类似于golang语言中的go语法
 pub fn spawn<F: Future>(f: F) {
     let rt = RUNTIME.get_mut();
 
-    let task = Task::new(f);
-    let waker = task.into_waker();
-
-    rt.running_tasks.insert(waker.data());
+    let waker = Task::new_waker(f, |tid| {
+        rt.running_tasks.insert(tid.clone());
+        RuntimeTaskClear { tid }
+    });
     rt.ready_wakers.push_back(waker);
 }
 
@@ -70,9 +81,4 @@ pub(crate) fn add_timer(wake_at: time::Instant, waker: Waker) {
         .get_mut()
         .timer_queue
         .add_timer(Timer::new(wake_at, waker));
-}
-
-// 任务结束时从running_tasks中删除掉
-pub(crate) fn task_done(data: *const ()) {
-    RUNTIME.get_mut().running_tasks.remove(&data);
 }

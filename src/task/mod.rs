@@ -1,3 +1,4 @@
+pub mod task_id;
 use std::{
     cell::RefCell,
     mem::ManuallyDrop,
@@ -7,23 +8,30 @@ use std::{
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
-use crate::runtime::task_done;
+use crate::task::task_id::{TaskId, alloc_id};
 
-pub struct Task<F: Future> {
-    result: RefCell<Option<F::Output>>,
-    fut: Pin<Box<F>>,
+pub trait TTaskClear {
+    fn clear(&self);
 }
 
-impl<F: Future> Task<F> {
-    pub fn new(f: F) -> Rc<Self> {
-        Rc::new(Self {
+pub struct Task<F: Future, C: TTaskClear> {
+    pub tid: TaskId,
+    result: RefCell<Option<F::Output>>,
+    fut: Pin<Box<F>>,
+    clear: C,
+}
+
+impl<F: Future, C: TTaskClear> Task<F, C> {
+    pub fn new_waker(f: F, mut init_factory: impl FnMut(TaskId) -> C) -> Waker {
+        let tid = alloc_id();
+        let task = Rc::new(Self {
+            tid: tid.clone(),
             result: RefCell::new(None),
             fut: Box::pin(f),
-        })
-    }
+            clear: init_factory(tid),
+        });
 
-    pub fn into_waker(self: Rc<Self>) -> Waker {
-        Self::to_waker(Rc::into_raw(self) as *const ())
+        Self::to_waker(Rc::into_raw(task) as *const ())
     }
 
     unsafe fn from_raw(data: *const ()) -> Rc<Self> {
@@ -52,11 +60,7 @@ impl<F: Future> Task<F> {
     }
 
     fn drop(data: *const ()) {
-        let task = unsafe { Self::from_raw(data) };
-        if Rc::strong_count(&task) == 1 {
-            // 资源释放
-            task_done(data);
-        }
+        let _ = unsafe { Self::from_raw(data) };
     }
 
     fn to_waker(data: *const ()) -> Waker {
@@ -67,11 +71,17 @@ impl<F: Future> Task<F> {
         RawWaker::new(
             data,
             &RawWakerVTable::new(
-                Task::<F>::clone,
-                Task::<F>::wake,
-                Task::<F>::wake_by_ref,
-                Task::<F>::drop,
+                Task::<F, C>::clone,
+                Task::<F, C>::wake,
+                Task::<F, C>::wake_by_ref,
+                Task::<F, C>::drop,
             ),
         )
+    }
+}
+
+impl<F: Future, C: TTaskClear> Drop for Task<F, C> {
+    fn drop(&mut self) {
+        self.clear.clear();
     }
 }

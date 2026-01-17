@@ -1,8 +1,9 @@
 use std::time;
 
-use mini_runtime::{run, sleep, spawn};
+use mini_runtime::{init_logger, run, sleep, spawn};
 
 fn main() {
+    init_logger(log::LevelFilter::Trace);
     let record = Record::new();
     spawn(a(&record));
 
@@ -56,6 +57,6 @@ impl Record {
     }
 
     fn record(&self, tag: &str) {
-        println!("{} at {}ms", tag, self.start_at.elapsed().as_millis());
+        log::debug!("{} at {}ms", tag, self.start_at.elapsed().as_millis());
     }
 }
