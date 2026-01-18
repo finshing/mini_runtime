@@ -1,27 +1,31 @@
-use std::time;
+use std::{rc::Rc, time};
 
-use mini_runtime::{run, sleep, spawn};
+use mini_runtime::sleep;
 
-fn main() {
-    let start_at = time::Instant::now();
+/*
+* 修改成宏方式后有两个问题：
+* 1. 日志时间不再准确————通过Rc来解决（因为被提前释放了）
+* 2. 最后的输出有问题————可以通过之后的WaitGroup来解决
+*/
+#[rt_entry::main]
+async fn main() {
+    let start_at = Rc::new(time::Instant::now());
 
     for i in 0..5 {
         spawn(a(
             format!("a-{}", i),
             time::Duration::from_secs(1),
-            &start_at,
+            start_at.clone(),
         ));
     }
 
-    spawn(b(&start_at));
-    spawn(c(&start_at));
-
-    run();
+    spawn(b(start_at.clone()));
+    spawn(c(start_at.clone()));
 
     println!("total cost {}ms", start_at.elapsed().as_millis());
 }
 
-async fn a(idx: impl AsRef<str>, delay: time::Duration, start_at: &time::Instant) {
+async fn a(idx: impl AsRef<str>, delay: time::Duration, start_at: Rc<time::Instant>) {
     sleep(delay).await;
     println!(
         "sleep-{} done at {:?}ms",
@@ -30,11 +34,11 @@ async fn a(idx: impl AsRef<str>, delay: time::Duration, start_at: &time::Instant
     );
 }
 
-async fn b(start_at: &time::Instant) {
-    a("b-1", time::Duration::from_secs(1), start_at).await;
-    a("b-2", time::Duration::from_secs(1), start_at).await;
+async fn b(start_at: Rc<time::Instant>) {
+    a("b-1", time::Duration::from_secs(1), start_at.clone()).await;
+    a("b-2", time::Duration::from_secs(1), start_at.clone()).await;
 }
 
-async fn c(start_at: &time::Instant) {
-    a("c-1", time::Duration::from_millis(1500), start_at).await;
+async fn c(start_at: Rc<time::Instant>) {
+    a("c-1", time::Duration::from_millis(1500), start_at.clone()).await;
 }

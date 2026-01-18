@@ -103,3 +103,17 @@ impl Future for Sleeper {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use core::time;
+
+    use crate::sleep;
+
+    #[rt_entry::test]
+    async fn test_sleep() {
+        log::info!("in test");
+        sleep(time::Duration::from_secs(1)).await;
+        log::info!("test done");
+    }
+}

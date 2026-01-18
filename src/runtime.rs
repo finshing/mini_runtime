@@ -59,7 +59,7 @@ struct RuntimeTaskClear {
 
 impl TTaskClear for RuntimeTaskClear {
     fn clear(&self) {
-        log::trace!("remove task {}", self.tid.as_ref());
+        log::trace!("remove {}", self.tid.as_ref());
         RUNTIME.get_mut().running_tasks.remove(&self.tid);
     }
 }

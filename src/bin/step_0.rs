@@ -1,13 +1,11 @@
 use std::time;
 
-use mini_runtime::{init_logger, run, sleep, spawn};
+use mini_runtime::sleep;
 
-fn main() {
-    init_logger(log::LevelFilter::Trace);
+#[rt_entry::main(log_level = "trace")]
+async fn main() {
     let record = Record::new();
-    spawn(a(&record));
-
-    run();
+    a(&record).await;
     record.record("finish");
 }
 
