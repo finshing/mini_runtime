@@ -14,8 +14,8 @@ use crate::{
 
 #[derive(Default)]
 pub struct Runtime {
-    // 尚在运行中的任务
-    running_tasks: HashSet<*const ()>,
+    // 全部的任务
+    total_tasks: HashSet<*const ()>,
 
     // 等待被唤醒的Waker
     ready_wakers: VecDeque<Waker>,
@@ -40,13 +40,13 @@ pub fn spawn<F: Future>(f: F) {
 
     let waker = Task::new_waker(f);
 
-    rt.running_tasks.insert(waker.data());
+    rt.total_tasks.insert(waker.data());
     rt.ready_wakers.push_back(waker);
 }
 
 // 是否还存在运行中的任务。用于runtime的退出时判断
 pub(crate) fn can_finish() -> bool {
-    RUNTIME.exclusive_access().running_tasks.is_empty()
+    RUNTIME.exclusive_access().total_tasks.is_empty()
 }
 
 pub(crate) fn get_waker() -> Option<Waker> {
@@ -73,5 +73,5 @@ pub(crate) fn add_timer(wake_at: time::Instant, waker: Waker) {
 
 // 任务结束时从running_tasks中删除掉
 pub(crate) fn task_done(data: *const ()) {
-    RUNTIME.exclusive_access().running_tasks.remove(&data);
+    RUNTIME.exclusive_access().total_tasks.remove(&data);
 }
