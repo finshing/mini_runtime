@@ -9,6 +9,12 @@ pub struct Error {
     type_: ErrorType,
 }
 
+impl Error {
+    pub fn err_type(&self) -> &ErrorType {
+        &self.type_
+    }
+}
+
 impl Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "error {:?}:\n{:?}", self.type_, self.bt)

@@ -15,7 +15,7 @@ use crate::{
 #[derive(Default)]
 pub struct Runtime {
     // 尚在运行中的任务
-    running_tasks: HashSet<TaskId>,
+    total_tasks: HashSet<TaskId>,
 
     // 等待被唤醒的Waker
     ready_wakers: VecDeque<Waker>,
@@ -36,7 +36,7 @@ struct RuntimeTaskClear {
 
 impl TTaskClear for RuntimeTaskClear {
     fn clear(&self) {
-        RUNTIME.exclusive_access().running_tasks.remove(&self.tid);
+        RUNTIME.exclusive_access().total_tasks.remove(&self.tid);
     }
 }
 
@@ -49,7 +49,7 @@ pub fn spawn<F: Future>(f: F) {
     let mut rt = RUNTIME.exclusive_access();
 
     let waker = Task::new_waker(f, |tid| {
-        rt.running_tasks.insert(tid.clone());
+        rt.total_tasks.insert(tid.clone());
         RuntimeTaskClear { tid }
     });
 
@@ -58,7 +58,7 @@ pub fn spawn<F: Future>(f: F) {
 
 // 是否还存在运行中的任务。用于runtime的退出时判断
 pub(crate) fn can_finish() -> bool {
-    RUNTIME.exclusive_access().running_tasks.is_empty()
+    RUNTIME.exclusive_access().total_tasks.is_empty()
 }
 
 pub(crate) fn get_waker() -> Option<Waker> {
