@@ -22,12 +22,12 @@ async fn main() {
     spawn(b(start_at.clone()));
     spawn(c(start_at.clone()));
 
-    println!("total cost {}ms", start_at.elapsed().as_millis());
+    log::info!("total cost {}ms", start_at.elapsed().as_millis());
 }
 
 async fn a(idx: impl AsRef<str>, delay: time::Duration, start_at: Rc<time::Instant>) {
     sleep(delay).await;
-    println!(
+    log::info!(
         "sleep-{} done at {:?}ms",
         idx.as_ref(),
         start_at.elapsed().as_millis()
