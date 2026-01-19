@@ -1,8 +1,8 @@
 pub mod task_id;
+
 use std::{
     cell::RefCell,
     mem::ManuallyDrop,
-    ops::Deref,
     pin::Pin,
     rc::Rc,
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
@@ -31,19 +31,17 @@ impl<F: Future, C: TTaskClear> Task<F, C> {
             clear: init_factory(tid),
         });
 
-        Self::to_waker(Rc::into_raw(task) as *const ())
+        unsafe { Waker::new(Rc::into_raw(task) as *const (), Self::waker_vtable()) }
     }
 
-    unsafe fn from_raw(data: *const ()) -> Rc<Self> {
-        unsafe { Rc::from_raw(data as *const _) }
-    }
-
+    // 引用计数加一
     fn clone(data: *const ()) -> RawWaker {
-        let task = ManuallyDrop::new(unsafe { Self::from_raw(data) });
-        let task_cloned = task.deref().clone();
-        Self::to_raw_waker(Rc::into_raw(task_cloned) as *const ())
+        let task = ManuallyDrop::new(unsafe { Rc::from_raw(data as *const Self) });
+        let _task_cloned = task.clone();
+        RawWaker::new(data, Self::waker_vtable())
     }
 
+    // 需要保证自身被消费掉
     fn wake(data: *const ()) {
         Self::wake_by_ref(data);
         Self::drop(data);
@@ -52,30 +50,26 @@ impl<F: Future, C: TTaskClear> Task<F, C> {
     fn wake_by_ref(data: *const ()) {
         let task = unsafe { &mut *(data as *mut Self) };
 
-        let waker = ManuallyDrop::new(Self::to_waker(data));
+        // 构造cx，并通过Future::poll驱动异步的执行
+        // 这虽然用到了clone，但之后又会被drop，因此可以保证Rc<Task<F>>的引用计数不发生变化
+        let waker = unsafe { Waker::from_raw(Self::clone(data)) };
         let mut cx = Context::from_waker(&waker);
         if let Poll::Ready(result) = task.fut.as_mut().poll(&mut cx) {
             task.result.borrow_mut().replace(result);
         }
     }
 
+    // 引用计数减一，并保证资源正确释放
     fn drop(data: *const ()) {
-        let _ = unsafe { Self::from_raw(data) };
+        let _ = unsafe { Rc::from_raw(data as *const Self) };
     }
 
-    fn to_waker(data: *const ()) -> Waker {
-        unsafe { Waker::from_raw(Self::to_raw_waker(data)) }
-    }
-
-    fn to_raw_waker(data: *const ()) -> RawWaker {
-        RawWaker::new(
-            data,
-            &RawWakerVTable::new(
-                Task::<F, C>::clone,
-                Task::<F, C>::wake,
-                Task::<F, C>::wake_by_ref,
-                Task::<F, C>::drop,
-            ),
+    fn waker_vtable() -> &'static RawWakerVTable {
+        &RawWakerVTable::new(
+            Task::<F, C>::clone,
+            Task::<F, C>::wake,
+            Task::<F, C>::wake_by_ref,
+            Task::<F, C>::drop,
         )
     }
 }

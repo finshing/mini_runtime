@@ -1,18 +1,18 @@
-use std::cell::UnsafeCell;
+use std::cell::{RefCell, RefMut};
 
 pub struct UPSafeCell<T> {
-    inner: UnsafeCell<T>,
+    inner: RefCell<T>,
 }
 
 impl<T> UPSafeCell<T> {
     pub fn new(t: T) -> Self {
         Self {
-            inner: UnsafeCell::new(t),
+            inner: RefCell::new(t),
         }
     }
 
-    pub fn get_mut(&self) -> &mut T {
-        unsafe { &mut *self.inner.get() }
+    pub fn exclusive_access(&self) -> RefMut<'_, T> {
+        self.inner.borrow_mut()
     }
 }
 

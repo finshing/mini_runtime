@@ -9,7 +9,7 @@ pub struct _TaskId(usize);
 
 impl Drop for _TaskId {
     fn drop(&mut self) {
-        TASK_ID_GEN.get_mut().recycle_use(self.0);
+        TASK_ID_GEN.exclusive_access().recycle_use(self.0);
     }
 }
 
@@ -53,5 +53,5 @@ lazy_static! {
 }
 
 pub(crate) fn alloc_id() -> TaskId {
-    TASK_ID_GEN.get_mut().gen_id()
+    TASK_ID_GEN.exclusive_access().gen_id()
 }
