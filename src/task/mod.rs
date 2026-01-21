@@ -1,4 +1,5 @@
 pub mod task_id;
+pub mod waker_ext;
 
 use std::{
     cell::RefCell,
@@ -10,12 +11,29 @@ use std::{
 
 use crate::task::task_id::{TaskId, alloc_id};
 
+// 任务属性，避免泛型带来的反解析问题
+pub struct TaskAttr {
+    pub tid: TaskId,
+}
+
+impl TaskAttr {
+    fn new() -> Self {
+        TaskAttr { tid: alloc_id() }
+    }
+
+    // 通过Waker::data()反解析得到任务的TaskAttr
+    pub unsafe fn from_raw_data(data: *const ()) -> &'static mut Self {
+        unsafe { &mut *(data as *const Self as *mut _) }
+    }
+}
+
 pub trait TTaskClear {
     fn clear(&self);
 }
 
+#[repr(C)]
 pub struct Task<F: Future, C: TTaskClear> {
-    pub tid: TaskId,
+    attr: TaskAttr,
     result: RefCell<Option<F::Output>>,
     fut: Pin<Box<F>>,
     clear: C,
@@ -23,12 +41,13 @@ pub struct Task<F: Future, C: TTaskClear> {
 
 impl<F: Future, C: TTaskClear> Task<F, C> {
     pub fn new_waker(f: F, mut init_factory: impl FnMut(TaskId) -> C) -> Waker {
-        let tid = alloc_id();
+        let attr = TaskAttr::new();
+        let clear = init_factory(attr.tid.clone());
         let task = Rc::new(Self {
-            tid: tid.clone(),
+            attr,
             result: RefCell::new(None),
             fut: Box::pin(f),
-            clear: init_factory(tid),
+            clear,
         });
 
         unsafe { Waker::new(Rc::into_raw(task) as *const (), Self::waker_vtable()) }
