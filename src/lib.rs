@@ -9,14 +9,14 @@ use std::io::Write;
 use std::time;
 
 pub(crate) mod helper;
+pub mod macros;
 pub mod result;
-pub(crate) mod runtime;
+pub mod runtime;
 pub(crate) mod task;
 pub(crate) mod timer;
 
 use chrono::Local;
 use log::{Level, LevelFilter};
-pub use runtime::spawn;
 
 fn get_level_color(level: Level) -> usize {
     match level {
@@ -66,5 +66,5 @@ pub fn run() {
         wait();
     }
 
-    log::info!("runtime done");
+    log::debug!("runtime done");
 }

@@ -12,15 +12,15 @@ async fn main() {
     let start_at = Rc::new(time::Instant::now());
 
     for i in 0..5 {
-        spawn(a(
+        spawn!(a(
             format!("a-{}", i),
             time::Duration::from_secs(1),
             start_at.clone(),
         ));
     }
 
-    spawn(b(start_at.clone()));
-    spawn(c(start_at.clone()));
+    spawn!(b(start_at.clone()));
+    spawn!(c(start_at.clone()));
 
     log::info!("total cost {}ms", start_at.elapsed().as_millis());
 }
