@@ -11,6 +11,7 @@ use std::{
 
 use crate::task::task_id::{TaskId, alloc_id};
 
+#[derive(Debug)]
 // 任务属性，避免泛型带来的反解析问题
 pub struct TaskAttr {
     pub tid: TaskId,

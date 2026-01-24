@@ -4,7 +4,12 @@ use mio::Token;
 
 use crate::{
     result::Result,
-    task::{TaskAttr, task_id::TaskId, waker_ext::WakerExt},
+    runtime::reregister,
+    task::{
+        TaskAttr,
+        task_id::TaskId,
+        waker_ext::{WakerExt, WakerSet},
+    },
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -23,9 +28,11 @@ impl Event {
 
     // mio::Interest的各个值之间可以进行或运算
     pub fn to_interests(events: Vec<Event>) -> Option<mio::Interest> {
-        let interests: Option<mio::Interest> = None;
+        let mut interests: Option<mio::Interest> = None;
         for event in events {
-            interests.map_or_else(|| event.to_interest(), |is| is.add(event.to_interest()));
+            interests = Some(
+                interests.map_or_else(|| event.to_interest(), |is| is.add(event.to_interest())),
+            );
         }
         interests
     }
@@ -34,10 +41,10 @@ impl Event {
 #[derive(Default)]
 pub struct IoEvent {
     // 等待读事件的Waker
-    read_wakers: HashSet<WakerExt>,
+    read_wakers: WakerSet,
 
     // 等待写事件的Waker
-    write_wakers: HashSet<WakerExt>,
+    write_wakers: WakerSet,
 }
 
 impl IoEvent {
@@ -50,26 +57,34 @@ impl IoEvent {
         Token(self as *const _ as usize)
     }
 
+    pub unsafe fn from_token(token: Token) -> &'static mut Self {
+        unsafe { &mut *(token.0 as *const Self as *mut _) }
+    }
+
+    pub fn reregister<S: mio::event::Source>(
+        &mut self,
+        source: &mut S,
+        event: Event,
+    ) -> Result<IoEventHandler<'_>> {
+        IoEventHandler::new(event, self, source)
+    }
+
     // 添加等待事件的Waker
-    pub fn wait(&mut self, event: Event, waker_ext: WakerExt) {
+    pub fn wait(&mut self, event: Event, waker: Waker) {
         match event {
-            Event::Read => self.read_wakers.insert(waker_ext),
-            Event::Write => self.write_wakers.insert(waker_ext),
+            Event::Read => self.read_wakers.add_waker(waker),
+            Event::Write => self.write_wakers.add_waker(waker),
         };
     }
 
     // 事件就绪，并获取就绪的全部Waker
-    pub fn event_ready(&mut self, event: &mio::event::Event) -> Vec<Waker> {
+    pub fn read_events(&mut self, event: &mio::event::Event) -> Vec<Waker> {
         let mut wakers: Vec<Waker> = Vec::new();
         if event.is_readable() {
-            for waker_ext in self.read_wakers.drain() {
-                wakers.push(waker_ext.0);
-            }
+            wakers.extend(self.read_wakers.drain());
         }
         if event.is_writable() {
-            for waker_ext in self.write_wakers.drain() {
-                wakers.push(waker_ext.0);
-            }
+            wakers.extend(self.write_wakers.drain());
         }
 
         wakers
@@ -77,16 +92,12 @@ impl IoEvent {
 
     fn is_event_ready(&self, event: Event, waker: &Waker) -> bool {
         let task_attr = unsafe { TaskAttr::from_raw_data(waker.data()) };
-        match event {
+        // 就绪的waker都已在poll的时候被取出（注意这里使用!取反）
+        !match event {
             Event::Read => self.read_wakers.contains(&task_attr.tid),
             Event::Write => self.write_wakers.contains(&task_attr.tid),
         }
     }
-}
-
-pub trait TReregister<'a> {
-    // 支持不同io类型的事件重新注册，方便进行读或者写的切换。
-    fn reregister(&'a mut self, events: Vec<Event>) -> Result<&'a mut IoEvent>;
 }
 
 // io事件处理Future
@@ -94,19 +105,21 @@ pub struct IoEventHandler<'a> {
     event: Event,
     // 这里使用RefCell主要是方便在self.once时使用
     io_event: RefCell<&'a mut IoEvent>,
-    // 部分场景下，IoEventHandler可能都没有执行就被删除了（如之后要实现的select里），这时候也希望从相应的队列里也删除掉对应的Waker，避免被意外的唤醒
-    tid: RefCell<Option<TaskId>>,
     once: Once,
 }
 
 impl<'a> IoEventHandler<'a> {
-    fn new(event: Event, io_event: &'a mut IoEvent) -> Self {
-        Self {
+    fn new<S: mio::event::Source>(
+        event: Event,
+        io_event: &'a mut IoEvent,
+        source: &mut S,
+    ) -> Result<Self> {
+        reregister(vec![event], io_event, source)?;
+        Ok(Self {
             event,
             io_event: RefCell::new(io_event),
-            tid: RefCell::new(None),
             once: Once::new(),
-        }
+        })
     }
 }
 
@@ -118,11 +131,9 @@ impl<'a> Future for IoEventHandler<'a> {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         self.once.call_once(|| {
-            let waker_ext: WakerExt = cx.waker().clone().into();
-            self.tid
+            self.io_event
                 .borrow_mut()
-                .replace(waker_ext.get_task_attr().tid.clone());
-            self.io_event.borrow_mut().wait(self.event, waker_ext);
+                .wait(self.event, cx.waker().clone());
         });
 
         if self
@@ -133,14 +144,6 @@ impl<'a> Future for IoEventHandler<'a> {
             std::task::Poll::Ready(())
         } else {
             std::task::Poll::Pending
-        }
-    }
-}
-
-impl<'a> Drop for IoEventHandler<'a> {
-    fn drop(&mut self) {
-        if let Some(tid) = self.tid.borrow().as_ref() {
-            self.io_event.borrow_mut().read_wakers.remove(tid);
         }
     }
 }

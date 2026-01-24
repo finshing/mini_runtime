@@ -1,18 +1,20 @@
 use std::{
     collections::{HashSet, VecDeque},
     task::Waker,
-    thread, time,
+    time,
 };
 
 use lazy_static::lazy_static;
 
 use crate::{
     helper::UPSafeCell,
+    io_event::IoEvent,
+    poller::Poller,
+    result::Result,
     task::{TTaskClear, Task, task_id::TaskId},
-    timer::{PriorityTimerQueue, Timer},
+    timer::Timer,
 };
 
-#[derive(Default)]
 pub struct Runtime {
     // 尚在运行中的任务
     total_tasks: HashSet<TaskId>,
@@ -20,13 +22,16 @@ pub struct Runtime {
     // 等待被唤醒的Waker
     ready_wakers: VecDeque<Waker>,
 
-    // 定时任务优先队列
-    timer_queue: PriorityTimerQueue,
+    poller: Poller,
 }
 
 impl Runtime {
-    fn new() -> Self {
-        Self::default()
+    fn new() -> Result<Self> {
+        Ok(Self {
+            total_tasks: HashSet::new(),
+            ready_wakers: VecDeque::new(),
+            poller: Poller::new()?,
+        })
     }
 }
 
@@ -41,7 +46,8 @@ impl TTaskClear for RuntimeTaskClear {
 }
 
 lazy_static! {
-    pub static ref RUNTIME: UPSafeCell<Runtime> = UPSafeCell::new(Runtime::new());
+    pub static ref RUNTIME: UPSafeCell<Runtime> =
+        UPSafeCell::new(Runtime::new().expect("init Runtime failed"));
 }
 
 // 提交一个任务。类似于golang语言中的go语法
@@ -68,9 +74,7 @@ pub(crate) fn get_waker() -> Option<Waker> {
 // 等待可执行任务（事件就绪）
 pub(crate) fn wait() {
     let mut rt = RUNTIME.exclusive_access();
-    // 由于目前只有定时事件，所以可以保证尚有任务的时候.delay()不会返回None，因此使用unwrap()没有什么问题
-    thread::sleep(rt.timer_queue.delay().unwrap());
-    for waker in rt.timer_queue.get_wakers() {
+    for waker in rt.poller.poll() {
         rt.ready_wakers.push_back(waker);
     }
 }
@@ -79,6 +83,32 @@ pub(crate) fn wait() {
 pub(crate) fn add_timer(wake_at: time::Instant, waker: Waker) {
     RUNTIME
         .exclusive_access()
-        .timer_queue
+        .poller
         .add_timer(Timer::new(wake_at, waker));
+}
+
+pub(crate) fn register<S: mio::event::Source>(
+    events: Vec<crate::io_event::Event>,
+    io_event: &IoEvent,
+    source: &mut S,
+) -> Result<()> {
+    RUNTIME
+        .exclusive_access()
+        .poller
+        .register(events, io_event, source)
+}
+
+pub(crate) fn reregister<S: mio::event::Source>(
+    events: Vec<crate::io_event::Event>,
+    io_event: &IoEvent,
+    source: &mut S,
+) -> Result<()> {
+    RUNTIME
+        .exclusive_access()
+        .poller
+        .reregister(events, io_event, source)
+}
+
+pub(crate) fn deregister<S: mio::event::Source>(source: &mut S) -> Result<()> {
+    RUNTIME.exclusive_access().poller.deregister(source)
 }

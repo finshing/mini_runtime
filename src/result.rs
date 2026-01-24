@@ -1,4 +1,4 @@
-use std::{fmt::Debug, io};
+use std::{fmt::Debug, io, net::AddrParseError};
 
 use backtrace::Backtrace;
 
@@ -59,5 +59,11 @@ impl From<String> for Error {
 impl From<&str> for Error {
     fn from(value: &str) -> Self {
         ErrorType::RuntimeError(value.to_owned()).into()
+    }
+}
+
+impl From<AddrParseError> for Error {
+    fn from(e: AddrParseError) -> Self {
+        ErrorType::RuntimeError(format!("address parse failed: {}", e)).into()
     }
 }
