@@ -65,15 +65,15 @@ pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
     let body = &func.block;
     let attr = parse_macro_input!(args as EntryAttr);
 
-    let use_stream = import(false);
-    let init_logger_stream = init_logger(&attr);
-    let body_stream = gen_body(body);
+    let import = import_stream(false);
+    let logger_init = logger_init_stream(&attr);
+    let body = body_stream(body);
     let expanded = quote! {
         fn main() {
-            #use_stream
+            #import
 
-            #init_logger_stream
-            #body_stream
+            #logger_init
+            #body
         }
     };
 
@@ -92,17 +92,17 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let attr = parse_macro_input!(args as EntryAttr);
 
-    let use_stream = import(true);
-    let init_logger_stream = init_logger(&attr);
-    let body_stream = gen_body(body);
+    let import = import_stream(true);
+    let logger_init = logger_init_stream(&attr);
+    let body = body_stream(body);
     let expanded = quote! {
         #[test]
         fn #fn_name() {
-            #use_stream
+            #import
 
-            #init_logger_stream
+            #logger_init
             log::debug!("run test <{}>", #fn_name_str);
-            #body_stream
+            #body
         }
     };
 
@@ -115,19 +115,19 @@ fn error_stream(sig: &Signature, msg: &str) -> TokenStream {
         .into()
 }
 
-fn import(is_crate: bool) -> proc_macro2::TokenStream {
+fn import_stream(is_crate: bool) -> proc_macro2::TokenStream {
     if is_crate {
         quote! {
-            use crate::{init_logger, spawn, run};
+            use crate::{init_logger, run, spawn};
         }
     } else {
         quote! {
-            use mini_runtime::{init_logger, spawn, run};
+            use mini_runtime::{init_logger, run, spawn};
         }
     }
 }
 
-fn init_logger(entry_attr: &EntryAttr) -> proc_macro2::TokenStream {
+fn logger_init_stream(entry_attr: &EntryAttr) -> proc_macro2::TokenStream {
     let log_level_str = entry_attr.get_log_level();
     quote! {
         let log_level = match #log_level_str {
@@ -145,10 +145,12 @@ fn init_logger(entry_attr: &EntryAttr) -> proc_macro2::TokenStream {
     }
 }
 
-fn gen_body(body: &Block) -> proc_macro2::TokenStream {
+fn body_stream(body: &Block) -> proc_macro2::TokenStream {
     quote! {
-        let body = async #body;
-        spawn(body);
+        spawn!(async { #body }, |result| {
+            log::info!("runtime output: {:?}", result);
+        });
+
         run();
     }
 }

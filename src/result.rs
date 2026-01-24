@@ -26,7 +26,7 @@ pub enum ErrorType {
     Eof,
     Blocked,
     IoError(io::Error),
-    CommonError(String),
+    RuntimeError(String),
 }
 
 impl From<ErrorType> for Error {
@@ -52,12 +52,12 @@ impl From<io::Error> for Error {
 
 impl From<String> for Error {
     fn from(value: String) -> Self {
-        ErrorType::CommonError(value).into()
+        ErrorType::RuntimeError(value).into()
     }
 }
 
 impl From<&str> for Error {
     fn from(value: &str) -> Self {
-        ErrorType::CommonError(value.to_owned()).into()
+        ErrorType::RuntimeError(value.to_owned()).into()
     }
 }
