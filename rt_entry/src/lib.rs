@@ -1,8 +1,10 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{Block, Ident, ItemFn, Lit, Signature, Token, parse::Parse, parse_macro_input};
+use quote::{ToTokens, quote};
+use syn::{
+    Block, Ident, ItemFn, Lit, ReturnType, Signature, Token, Type, parse::Parse, parse_macro_input,
+};
 
 // 过程宏可选参数
 #[derive(Debug, Default)]
@@ -62,12 +64,13 @@ pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
         return error_stream(&func.sig, "main() function should without arguments");
     }
 
+    let output = &func.sig.output;
     let body = &func.block;
     let attr = parse_macro_input!(args as EntryAttr);
 
     let import = import_stream(false);
     let logger_init = logger_init_stream(&attr);
-    let body = body_stream(body);
+    let body = body_stream(body, output);
     let expanded = quote! {
         fn main() {
             #import
@@ -88,13 +91,14 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
     }
     let fn_name = func.sig.ident;
     let fn_name_str = fn_name.to_string();
+    let output = &func.sig.output;
     let body = &func.block;
 
     let attr = parse_macro_input!(args as EntryAttr);
 
     let import = import_stream(true);
     let logger_init = logger_init_stream(&attr);
-    let body = body_stream(body);
+    let body = body_stream(body, output);
     let expanded = quote! {
         #[test]
         fn #fn_name() {
@@ -145,9 +149,19 @@ fn logger_init_stream(entry_attr: &EntryAttr) -> proc_macro2::TokenStream {
     }
 }
 
-fn body_stream(body: &Block) -> proc_macro2::TokenStream {
+fn body_stream(body: &Block, output: &ReturnType) -> proc_macro2::TokenStream {
+    let result_type = match output {
+        ReturnType::Default => {
+            let unit_type = Type::Tuple(syn::TypeTuple {
+                paren_token: syn::token::Paren(proc_macro2::Span::call_site()),
+                elems: syn::punctuated::Punctuated::new(),
+            });
+            unit_type.to_token_stream()
+        }
+        ReturnType::Type(_, ty) => ty.to_token_stream(),
+    };
     quote! {
-        spawn!(async { #body }, |result| {
+        spawn!(async { #body }, |result: #result_type| {
             log::info!("runtime output: {:?}", result);
         });
 
