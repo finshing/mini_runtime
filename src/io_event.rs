@@ -1,15 +1,11 @@
-use std::{cell::RefCell, collections::HashSet, io, sync::Once, task::Waker};
+use std::{cell::RefCell, sync::Once, task::Waker};
 
 use mio::Token;
 
 use crate::{
     result::Result,
     runtime::reregister,
-    task::{
-        TaskAttr,
-        task_id::TaskId,
-        waker_ext::{WakerExt, WakerSet},
-    },
+    task::{TaskAttr, waker_ext::WakerSet},
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -19,7 +15,7 @@ pub enum Event {
 }
 
 impl Event {
-    pub fn to_interest(&self) -> mio::Interest {
+    pub fn to_interest(self) -> mio::Interest {
         match self {
             Event::Read => mio::Interest::READABLE,
             Event::Write => mio::Interest::WRITABLE,

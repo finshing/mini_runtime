@@ -4,7 +4,7 @@ use mini_runtime::{
     tcp::{listener::Listener, stream::Stream},
 };
 
-#[rt_entry::main]
+#[rt_entry::main(log_level = "debug")]
 async fn main() -> Result<()> {
     let mut listener = Listener::new(ECHO_SERVER_IP, ECHO_SERVER_PORT)?;
 
