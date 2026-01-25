@@ -71,6 +71,11 @@ pub(crate) fn get_waker() -> Option<Waker> {
     RUNTIME.exclusive_access().ready_wakers.pop_front()
 }
 
+// 新增任务
+pub(crate) fn add_waker(waker: Waker) {
+    RUNTIME.exclusive_access().ready_wakers.push_back(waker);
+}
+
 // 等待可执行任务（事件就绪）
 pub(crate) fn wait() {
     let mut rt = RUNTIME.exclusive_access();

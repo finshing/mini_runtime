@@ -42,6 +42,21 @@ impl WakerSet {
             .map(|waker_ext| waker_ext.0)
             .collect()
     }
+
+    pub fn pop(&mut self) -> Option<Waker> {
+        let tid = self
+            .0
+            .borrow()
+            .iter()
+            .next()
+            .map(|waker_ext| waker_ext.tid.clone());
+
+        if let Some(tid) = tid {
+            self.0.borrow_mut().take(&tid).map(|waker_ext| waker_ext.0)
+        } else {
+            None
+        }
+    }
 }
 
 // Waker增强，方便被获取Waker指向Task的一些属性信息及加入到HashSet中

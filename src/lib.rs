@@ -5,22 +5,30 @@ use crate::{
     runtime::{can_finish, get_waker, wait},
     timer::Sleeper,
 };
-use std::io::Write;
 use std::time;
+use std::{io::Write, pin::Pin};
 
 pub mod config;
 pub(crate) mod helper;
 pub(crate) mod io_event;
+pub mod io_ext;
 pub mod macros;
 pub(crate) mod poller;
 pub mod result;
 pub mod runtime;
+pub mod server;
+pub mod sync;
 pub(crate) mod task;
 pub mod tcp;
 pub(crate) mod timer;
 
 use chrono::Local;
 use log::{Level, LevelFilter};
+
+pub type BoxeFutureWithError<'a, T, E> =
+    Pin<Box<dyn Future<Output = std::result::Result<T, E>> + 'a>>;
+
+pub type BoxedFuture<'a, T> = BoxeFutureWithError<'a, T, crate::result::Error>;
 
 fn get_level_color(level: Level) -> usize {
     match level {
