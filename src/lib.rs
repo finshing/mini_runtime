@@ -16,19 +16,19 @@ pub mod macros;
 pub(crate) mod poller;
 pub mod result;
 pub mod runtime;
-pub mod server;
 pub mod sync;
 pub(crate) mod task;
 pub mod tcp;
 pub(crate) mod timer;
+pub mod web;
 
 use chrono::Local;
 use log::{Level, LevelFilter};
 
-pub type BoxeFutureWithError<'a, T, E> =
+pub type BoxedFutureWithError<'a, T, E> =
     Pin<Box<dyn Future<Output = std::result::Result<T, E>> + 'a>>;
 
-pub type BoxedFuture<'a, T> = BoxeFutureWithError<'a, T, crate::result::Error>;
+pub type BoxedFuture<'a, T> = BoxedFutureWithError<'a, T, crate::result::Error>;
 
 fn get_level_color(level: Level) -> usize {
     match level {

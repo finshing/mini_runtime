@@ -17,6 +17,14 @@ impl Error {
     pub fn err_type(&self) -> &ErrorType {
         &self.type_
     }
+
+    pub fn is_blocked(&self) -> bool {
+        matches!(self.type_, ErrorType::Blocked)
+    }
+
+    pub fn is_eof(&self) -> bool {
+        matches!(self.type_, ErrorType::Eof)
+    }
 }
 
 impl Display for Error {

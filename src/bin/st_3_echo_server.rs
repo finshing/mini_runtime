@@ -1,5 +1,6 @@
 use mini_runtime::{
     config::{ECHO_SERVER_IP, ECHO_SERVER_PORT},
+    io_ext::{read::TAsyncRead, write::TAsyncWrite},
     result::{ErrorType, Result},
     tcp::{listener::Listener, stream::Stream},
 };
@@ -30,12 +31,10 @@ async fn main() -> Result<()> {
 }
 
 async fn echo(mut stream: Stream) -> Result<()> {
-    stream.ready_to_read().await?;
+    TAsyncRead::ready(&mut stream).await?;
     let mut buf = [0u8; 1024];
-    let n = stream.read(&mut buf).await?;
-    let data = &buf[..n];
+    let n = stream.async_read(&mut buf)?;
 
-    stream.ready_to_write().await?;
-    stream.write(data.into()).await?;
+    stream.async_write(&buf[..n]).await?;
     Ok(())
 }

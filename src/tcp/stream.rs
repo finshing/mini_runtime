@@ -1,14 +1,14 @@
 use std::{
-    borrow::Cow,
     fmt::Display,
     io::{Read, Write},
-    os::fd::AsRawFd,
+    os::fd::{AsRawFd, RawFd},
 };
 
 use mio::net::TcpStream;
 
 use crate::{
     io_event::IoEvent,
+    io_ext::{read::TAsyncRead, write::TAsyncWrite},
     result::{ErrorType, Result},
     runtime::{deregister, register},
 };
@@ -32,30 +32,43 @@ impl Stream {
         })
     }
 
-    pub async fn ready_to_read(&mut self) -> Result<()> {
-        self.io_event
-            .reregister(&mut self.tcp_stream, crate::io_event::Event::Read)?
-            .await;
-        Ok(())
+    pub fn fd(&self) -> RawFd {
+        self.tcp_stream.as_raw_fd()
+    }
+}
+
+impl TAsyncRead for Stream {
+    fn ready(&mut self) -> crate::BoxedFuture<'_, ()> {
+        Box::pin(async {
+            self.io_event
+                .reregister(&mut self.tcp_stream, crate::io_event::Event::Read)?
+                .await;
+            Ok(())
+        })
     }
 
-    pub async fn ready_to_write(&mut self) -> Result<()> {
-        self.io_event
-            .reregister(&mut self.tcp_stream, crate::io_event::Event::Write)?
-            .await;
-        Ok(())
-    }
-
-    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+    fn async_read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let size = self.tcp_stream.read(buf)?;
         if size == 0 {
             return Err(ErrorType::Eof.into());
         }
         Ok(size)
     }
+}
 
-    pub async fn write(&mut self, data: Cow<'_, [u8]>) -> Result<usize> {
-        Ok(self.tcp_stream.write(&data)?)
+impl TAsyncWrite for Stream {
+    fn async_write<'a>(&'a mut self, data: &'a [u8]) -> crate::BoxedFuture<'a, usize> {
+        Box::pin(async {
+            self.io_event
+                .reregister(&mut self.tcp_stream, crate::io_event::Event::Write)?
+                .await;
+
+            Ok(self.tcp_stream.write(data)?)
+        })
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        Ok(self.tcp_stream.flush()?)
     }
 }
 
