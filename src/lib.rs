@@ -22,6 +22,8 @@ pub mod tcp;
 pub(crate) mod timer;
 pub mod web;
 
+pub use helper::UPSafeCell;
+
 use chrono::Local;
 use log::{Level, LevelFilter};
 
