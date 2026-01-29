@@ -1,4 +1,8 @@
-use std::{fmt::Debug, io, net::AddrParseError};
+use std::{
+    fmt::{Debug, Display},
+    io,
+    net::AddrParseError,
+};
 
 use backtrace::Backtrace;
 
@@ -15,9 +19,15 @@ impl Error {
     }
 }
 
-impl Debug for Error {
+impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "error {:?}:\n{:?}", self.type_, self.bt)
+    }
+}
+
+impl Debug for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "error {:?}", self.type_)
     }
 }
 
