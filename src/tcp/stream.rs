@@ -67,14 +67,14 @@ impl TAsyncWrite for Stream {
         })
     }
 
-    #[cfg(target_os = "linux")]
-    fn flush(&mut self) -> Result<()> {
-        Ok(self.tcp_stream.set_nodelay(true)?)
-    }
-
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     fn flush(&mut self) -> Result<()> {
         Ok(self.tcp_stream.flush()?)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn flush(&mut self) -> Result<()> {
+        Ok(self.tcp_stream.set_nodelay(true)?)
     }
 }
 
