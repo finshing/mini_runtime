@@ -39,8 +39,12 @@ pub async fn request_handler(conn: Conn) -> RedisResult<()> {
     loop {
         let start_at = time::Instant::now();
         let req = variable_log!(debug @ handler.receive().await, "[redis request]")?;
+        log::info!(
+            "{:?} op receive cost {}ms",
+            req,
+            start_at.elapsed().as_millis()
+        );
         let resp = variable_log!(debug @ db_op(&req), "[redis response]");
-        log::info!("{:?} op cost {}ms", req, start_at.elapsed().as_millis());
 
         err_log!(handler.send(resp).await)?;
         log::info!("{:?} total cost {}ms", req, start_at.elapsed().as_millis());

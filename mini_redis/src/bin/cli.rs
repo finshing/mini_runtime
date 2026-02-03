@@ -1,6 +1,6 @@
 use mini_redis::{client::RedisClient, config, request::Request, result::RedisResult};
 
-#[rt_entry::main]
+#[rt_entry::main(log_level = "info")]
 async fn main() -> RedisResult<()> {
     client_run().await
 }

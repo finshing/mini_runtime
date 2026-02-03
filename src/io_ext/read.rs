@@ -53,9 +53,9 @@ impl<R: TAsyncBufRead> AsyncReader<R> {
         let mut reader = self.buf_reader.lock().await;
         loop {
             // find找的的是匹配字符串首字符的offset
-            match reader
+            match variable_log!(trace @ reader
                 .read_util(|buf| memmem::find(buf, end_at).map(|size| size + end_at.len()))
-                .await
+                .await, ".read_until()")
             {
                 Ok(data) => return Ok(data),
                 Err(e) if e.is_blocked() => continue,
