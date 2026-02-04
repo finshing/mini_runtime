@@ -20,6 +20,8 @@ pub struct Stream {
 
 impl Stream {
     pub fn new(mut tcp_stream: TcpStream) -> Result<Self> {
+        // 避免write后发送的非实时性
+        tcp_stream.set_nodelay(true)?;
         let io_event = IoEvent::new();
         register(
             vec![crate::io_event::Event::Read, crate::io_event::Event::Write],
