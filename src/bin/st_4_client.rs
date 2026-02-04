@@ -13,7 +13,8 @@ async fn main() -> Result<()> {
     let start_at = time::Instant::now();
     let wg = WaitGroup::new();
     for i in 0..10i64 {
-        spawn!(call((i - 5).pow(2) * 10, wg.add()));
+        // spawn!(call((i - 5).pow(2) * 10, wg.add()));
+        spawn!(call2(i as usize, wg.add()));
     }
 
     wg.wait().await;
@@ -21,16 +22,17 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+#[allow(unused)]
 async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
     let start_at = time::Instant::now();
-    log::info!("duration: {}", dur);
     let client = Client::connect(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)?;
     client
         .writer()
         .lock()
         .await
-        .write("hello, echo server".as_bytes())
+        .send("hello, echo server".as_bytes())
         .await?;
+    log::info!("send body");
 
     sleep(time::Duration::from_millis(dur as u64)).await;
     let resp = client.reader().readall().await?;
@@ -41,5 +43,24 @@ async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
         start_at.elapsed().as_millis()
     );
 
+    Ok(())
+}
+
+#[allow(unused)]
+async fn call2(times: usize, _guard: WaitGroupGuard<'_>) -> Result<()> {
+    let client = Client::connect(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)?;
+    let writer = client.writer();
+    let mut reader = client.reader();
+    let mut size = 0usize;
+    for _ in 0..10 {
+        writer
+            .lock()
+            .await
+            .send("hello, echo server".as_bytes())
+            .await?;
+        size += reader.read_once().await?.len();
+    }
+    // size += reader.read_once().await?.len();
+    log::info!("total get response: {}", size);
     Ok(())
 }

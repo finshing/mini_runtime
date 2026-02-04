@@ -37,7 +37,7 @@ where
         loop {
             match self.listener.accept() {
                 Ok((tcp_stream, addr)) => {
-                    log::info!("build connection with {}", addr);
+                    log::debug!("build connection with {}", addr);
                     if let Ok(conn) = err_log!(new_conn(tcp_stream), "Conn::new failed") {
                         spawn((self.conn_handler)(conn));
                     }

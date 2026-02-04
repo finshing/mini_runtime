@@ -31,10 +31,11 @@ async fn main() -> Result<()> {
 }
 
 async fn echo(mut stream: Stream) -> Result<()> {
-    TAsyncRead::ready(&mut stream).await?;
+    stream.ready_to_read().await?;
     let mut buf = [0u8; 1024];
-    let n = stream.async_read(&mut buf)?;
+    let n = stream.read(&mut buf)?;
 
-    stream.async_write(&buf[..n]).await?;
+    stream.ready_to_write().await?;
+    stream.write(&buf[..n])?;
     Ok(())
 }

@@ -4,7 +4,7 @@ use mini_runtime::{
     err_log,
     io_ext::{
         read::{AsyncReader, TAsyncBufRead},
-        write::{AsyncWriter, TAsyncWrite},
+        write::{AsyncBufWriter, TAsyncWrite},
     },
     variable_log,
     web::conn::Conn,
@@ -21,10 +21,19 @@ pub mod result;
 
 const CRLF: &str = "\r\n";
 
-pub(crate) async fn send<W: TAsyncWrite>(writer: AsyncWriter<W>, data: &[u8]) -> RedisResult<()> {
-    let mut writer = writer.lock().await;
-    writer.write(data).await?;
-    writer.write(CRLF.as_bytes()).await?;
+pub(crate) async fn send<W: TAsyncWrite>(
+    writer: AsyncBufWriter<W>,
+    data: &[u8],
+) -> RedisResult<()> {
+    writer
+        .lock()
+        .await
+        .write(data)
+        .await?
+        .write(CRLF.as_bytes())
+        .await?
+        .flush()
+        .await?;
     Ok(())
 }
 

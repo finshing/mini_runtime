@@ -1,5 +1,5 @@
 use crate::{
-    io_ext::{read::AsyncReader, write::AsyncWriter},
+    io_ext::{read::AsyncReader, write::AsyncBufWriter},
     result::Result,
     web::conn::{_Conn, Conn, new_conn},
 };
@@ -16,7 +16,7 @@ impl Client {
         })
     }
 
-    pub fn writer(&self) -> AsyncWriter<_Conn> {
+    pub fn writer(&self) -> AsyncBufWriter<_Conn> {
         self.conn.clone().into()
     }
 
