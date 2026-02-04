@@ -23,14 +23,14 @@ async fn main() -> Result<()> {
 
 async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
     let start_at = time::Instant::now();
-    log::info!("duration: {}", dur);
     let client = Client::connect(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)?;
     client
         .writer()
         .lock()
         .await
-        .write("hello, echo server".as_bytes())
+        .send("hello, echo server".as_bytes())
         .await?;
+    log::info!("send body");
 
     sleep(time::Duration::from_millis(dur as u64)).await;
     let resp = client.reader().readall().await?;
@@ -43,3 +43,10 @@ async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
 
     Ok(())
 }
+
+// async fn call2(times: usize, _guard: WaitGroupGuard<'_>) -> Result<()> {
+//     let client = Client::connect(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)?;
+//     for _ in 0..times {
+//         client.writer().s
+//     }
+// }

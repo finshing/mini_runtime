@@ -40,12 +40,12 @@ impl _Conn {
 }
 
 impl TAsyncRead for _Conn {
-    fn ready(&mut self) -> crate::BoxedFuture<'_, ()> {
-        self.stream.ready()
+    fn ready_to_read(&mut self) -> crate::BoxedFuture<'_, ()> {
+        self.stream.ready_to_read()
     }
 
-    fn async_read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        self.stream.async_read(buf)
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        self.stream.read(buf)
     }
 }
 
@@ -60,9 +60,9 @@ impl TAsyncBufRead for _Conn {
             }
 
             let mut buf = [0u8; READ_BUF_SIZE];
-            self.ready().await?;
+            self.ready_to_read().await?;
             loop {
-                let size = self.async_read(&mut buf)?;
+                let size = self.read(&mut buf)?;
                 self.buf.extend_from_slice(&buf[..size]);
                 if let Some(at) = read_while(&self.buf) {
                     return Ok(self.take(at));
@@ -73,11 +73,11 @@ impl TAsyncBufRead for _Conn {
 }
 
 impl TAsyncWrite for _Conn {
-    fn async_write<'a>(&'a mut self, data: &'a [u8]) -> crate::BoxedFuture<'a, usize> {
-        self.stream.async_write(data)
+    fn ready_to_write(&mut self) -> crate::BoxedFuture<'_, ()> {
+        self.stream.ready_to_write()
     }
 
-    fn flush(&mut self) -> Result<()> {
-        self.stream.flush()
+    fn write(&mut self, data: &[u8]) -> Result<usize> {
+        self.stream.write(data)
     }
 }

@@ -8,9 +8,9 @@ use crate::{
 
 pub trait TAsyncRead {
     // 判断读事件是否就绪
-    fn ready(&mut self) -> BoxedFuture<'_, ()>;
+    fn ready_to_read(&mut self) -> BoxedFuture<'_, ()>;
 
-    fn async_read(&mut self, buf: &mut [u8]) -> Result<usize>;
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize>;
 }
 
 pub trait TAsyncBufRead: TAsyncRead {
@@ -26,9 +26,9 @@ pub trait TAsyncBufRead: TAsyncRead {
         Box::pin(async {
             let mut buf = [0u8; READ_BUF_SIZE];
 
-            self.ready().await?;
+            self.ready_to_read().await?;
             loop {
-                let size = self.async_read(&mut buf)?;
+                let size = self.read(&mut buf)?;
                 if size == 0 {
                     return Ok(());
                 }

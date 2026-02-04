@@ -212,6 +212,7 @@ dependencies = [
  "env_logger",
  "lazy_static",
  "log",
+ "memchr",
  "mio",
  "rt_entry",
 ]

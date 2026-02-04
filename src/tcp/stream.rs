@@ -40,7 +40,7 @@ impl Stream {
 }
 
 impl TAsyncRead for Stream {
-    fn ready(&mut self) -> crate::BoxedFuture<'_, ()> {
+    fn ready_to_read(&mut self) -> crate::BoxedFuture<'_, ()> {
         Box::pin(async {
             self.io_event
                 .reregister(&mut self.tcp_stream, crate::io_event::Event::Read)?
@@ -49,7 +49,7 @@ impl TAsyncRead for Stream {
         })
     }
 
-    fn async_read(&mut self, buf: &mut [u8]) -> Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let size = self.tcp_stream.read(buf)?;
         if size == 0 {
             return Err(ErrorType::Eof.into());
@@ -59,18 +59,19 @@ impl TAsyncRead for Stream {
 }
 
 impl TAsyncWrite for Stream {
-    fn async_write<'a>(&'a mut self, data: &'a [u8]) -> crate::BoxedFuture<'a, usize> {
+    fn ready_to_write(&mut self) -> crate::BoxedFuture<'_, ()> {
         Box::pin(async {
             self.io_event
                 .reregister(&mut self.tcp_stream, crate::io_event::Event::Write)?
                 .await;
-
-            Ok(self.tcp_stream.write(data)?)
+            log::info!("write ready...");
+            Ok(())
         })
     }
 
-    fn flush(&mut self) -> Result<()> {
-        Ok(self.tcp_stream.flush()?)
+    fn write(&mut self, data: &[u8]) -> Result<usize> {
+        log::info!("write data...");
+        Ok(self.tcp_stream.write(data)?)
     }
 }
 

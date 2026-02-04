@@ -1,10 +1,7 @@
-use core::time;
-
 use mini_runtime::{
     config, create_server,
-    io_ext::{read::AsyncReader, write::AsyncWriter},
+    io_ext::{read::AsyncReader, write::AsyncBufWriter},
     result::Result,
-    sleep,
     web::conn::Conn,
 };
 
@@ -22,19 +19,19 @@ async fn main() -> Result<()> {
 
 async fn echo_server_handler(conn: Conn) -> Result<()> {
     let result = AsyncReader::from(conn.clone()).read_once().await?;
+    log::info!("read body");
 
-    AsyncWriter::from(conn.clone())
+    let buf_writer = AsyncBufWriter::from(conn);
+    buf_writer
         .lock()
         .await
-        .write(result.as_ref())
+        .write(&result)
+        .await?
+        .write(format!("(size={})", result.len()).as_bytes())
+        .await?
+        .flush()
         .await?;
-
-    sleep(time::Duration::from_millis(100)).await;
-    AsyncWriter::from(conn.clone())
-        .lock()
-        .await
-        .write(format!("(size={})", result.len()).as_ref())
-        .await?;
+    log::info!("send body");
 
     Ok(())
 }
