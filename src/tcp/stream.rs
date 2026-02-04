@@ -64,13 +64,11 @@ impl TAsyncWrite for Stream {
             self.io_event
                 .reregister(&mut self.tcp_stream, crate::io_event::Event::Write)?
                 .await;
-            log::info!("write ready...");
             Ok(())
         })
     }
 
     fn write(&mut self, data: &[u8]) -> Result<usize> {
-        log::info!("write data...");
         Ok(self.tcp_stream.write(data)?)
     }
 }

@@ -18,20 +18,22 @@ async fn main() -> Result<()> {
 }
 
 async fn echo_server_handler(conn: Conn) -> Result<()> {
-    let result = AsyncReader::from(conn.clone()).read_once().await?;
-    log::info!("read body");
+    let mut reader = AsyncReader::from(conn.clone());
+    let buf_writer = AsyncBufWriter::from(conn.clone());
+    loop {
+        let result = reader.read_once().await?;
+        if result.is_empty() {
+            break Ok(());
+        }
 
-    let buf_writer = AsyncBufWriter::from(conn);
-    buf_writer
-        .lock()
-        .await
-        .write(&result)
-        .await?
-        .write(format!("(size={})", result.len()).as_bytes())
-        .await?
-        .flush()
-        .await?;
-    log::info!("send body");
-
-    Ok(())
+        buf_writer
+            .lock()
+            .await
+            .write(&result)
+            .await?
+            .write(format!("(size={})", result.len()).as_bytes())
+            .await?
+            .flush()
+            .await?;
+    }
 }

@@ -80,31 +80,31 @@ impl<'a, W: TAsyncWrite> _AsyncBufWriterGuard<'a, W> {
     /// 将缓冲区的数据全部写入到内核
     /// 遇到Block的时候等待写事件再次就绪（内核缓冲区腾出空间时）
     pub async fn flush(&mut self) -> Result<()> {
-        log::info!("flush()");
         while !self.buf.is_empty() {
             self.writer.ready_to_write().await?;
             match self.flush_once() {
-                Ok(()) => return Ok(()),
+                Ok(()) => continue,
                 Err(e) if e.is_blocked() => continue,
-                Err(e) => return Err(e),
+                Err(e) => {
+                    log::error!("error in flush: {:?}", e);
+                    return Err(e);
+                }
             }
         }
-
         Ok(())
     }
 
     fn flush_once(&mut self) -> Result<()> {
-        let size = self.writer.write(&self.buf)?;
-        let _ = take_vec_at(&mut self.buf, size);
+        if !self.buf.is_empty() {
+            let size = self.writer.write(&self.buf)?;
+            let _ = take_vec_at(&mut self.buf, size);
+        }
         Ok(())
     }
 }
 
 impl<'a, W: TAsyncWrite> Drop for _AsyncBufWriterGuard<'a, W> {
     fn drop(&mut self) {
-        // 在应用层缓冲区还有数据的时候尝试再写入内核一次（不一等成功）
-        if !self.buf.is_empty() {
-            let _ = err_log!(self.flush_once(), ".flush_once() in drop failed");
-        }
+        let _ = err_log!(self.flush_once(), ".flush_once() in drop failed");
     }
 }

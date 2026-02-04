@@ -35,7 +35,7 @@ impl Poller {
         log::trace!("net_poll timeout: {:?}", timeout);
 
         let mut wakers = Vec::new();
-        let mut events = mio::event::Events::with_capacity(64);
+        let mut events = mio::event::Events::with_capacity(1024);
         match self.net_poll.poll(&mut events, timeout) {
             Ok(()) => {
                 for e in events.iter() {
