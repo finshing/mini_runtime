@@ -21,7 +21,7 @@ async fn echo_server_handler(conn: Conn) -> Result<()> {
     let mut reader = AsyncReader::from(conn.clone());
     let buf_writer = AsyncBufWriter::from(conn.clone());
     loop {
-        let result = reader.read_once().await?;
+        let result = reader.read_until_exclusive(config::CRLF).await?;
         if result.is_empty() {
             break Ok(());
         }
@@ -32,6 +32,8 @@ async fn echo_server_handler(conn: Conn) -> Result<()> {
             .write(&result)
             .await?
             .write(format!("(size={})", result.len()).as_bytes())
+            .await?
+            .write(config::CRLF.as_bytes())
             .await?
             .flush()
             .await?;

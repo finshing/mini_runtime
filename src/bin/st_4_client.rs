@@ -12,7 +12,7 @@ use mini_runtime::{
 async fn main() -> Result<()> {
     let start_at = time::Instant::now();
     let wg = WaitGroup::new();
-    for i in 0..10i64 {
+    for i in 0..1000i64 {
         // spawn!(call((i - 5).pow(2) * 10, wg.add()));
         spawn!(call2(i as usize, wg.add()));
     }
@@ -56,9 +56,13 @@ async fn call2(times: usize, _guard: WaitGroupGuard<'_>) -> Result<()> {
         writer
             .lock()
             .await
-            .send("hello, echo server".as_bytes())
+            .write("hello, echo server".as_bytes())
+            .await?
+            .write(config::CRLF.as_bytes())
+            .await?
+            .flush()
             .await?;
-        size += reader.read_once().await?.len();
+        size += reader.read_until_exclusive(config::CRLF).await?.len();
     }
     // size += reader.read_once().await?.len();
     log::info!("total get response: {}", size);
