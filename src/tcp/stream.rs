@@ -20,8 +20,6 @@ pub struct Stream {
 
 impl Stream {
     pub fn new(mut tcp_stream: TcpStream) -> Result<Self> {
-        // 避免write后发送的非实时性
-        tcp_stream.set_nodelay(true)?;
         let io_event = IoEvent::new();
         register(
             vec![crate::io_event::Event::Read, crate::io_event::Event::Write],
@@ -48,7 +46,7 @@ impl Stream {
         Ok(())
     }
 
-    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let size = self.tcp_stream.read(buf)?;
         if size == 0 {
             return Err(ErrorType::Eof.into());
@@ -56,7 +54,7 @@ impl Stream {
         Ok(size)
     }
 
-    pub async fn write(&mut self, data: Cow<'_, [u8]>) -> Result<usize> {
+    pub fn write(&mut self, data: Cow<'_, [u8]>) -> Result<usize> {
         Ok(self.tcp_stream.write(&data)?)
     }
 }
