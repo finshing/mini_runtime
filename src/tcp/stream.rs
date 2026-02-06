@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     fmt::Display,
     io::{Read, Write},
     os::fd::AsRawFd,
@@ -54,8 +53,8 @@ impl Stream {
         Ok(size)
     }
 
-    pub fn write(&mut self, data: Cow<'_, [u8]>) -> Result<usize> {
-        Ok(self.tcp_stream.write(&data)?)
+    pub fn write(&mut self, data: &[u8]) -> Result<usize> {
+        Ok(self.tcp_stream.write(data)?)
     }
 }
 

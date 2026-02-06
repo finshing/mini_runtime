@@ -36,6 +36,6 @@ async fn echo(mut stream: Stream) -> Result<()> {
     let data = &buf[..n];
 
     stream.ready_to_write().await?;
-    stream.write(data.into())?;
+    stream.write(data)?;
     Ok(())
 }
