@@ -1,66 +1,70 @@
 use std::{
-    cell::RefCell,
-    collections::HashSet,
     fmt::Debug,
     hash::Hash,
     ops::{Deref, DerefMut},
-    rc::Rc,
     task::Waker,
 };
 
-use crate::task::{TaskAttr, task_id::TaskId};
+use crate::{
+    collections::hash_set::{HashSetExt, HashSetExtDropper, ToBorrow},
+    task::{TaskAttr, task_id::TaskId},
+};
 
-#[derive(Default, Debug)]
-pub struct WakerSet(Rc<RefCell<HashSet<WakerExt>>>);
+pub type WakerSet = HashSetExt<WakerExt>;
 
-impl WakerSet {
-    pub fn add_waker(&mut self, waker: Waker) {
-        self.0.borrow_mut().insert(waker.into());
-    }
+pub type WakerSetDropper = HashSetExtDropper<WakerExt, TaskId>;
 
-    #[allow(unused)]
-    pub fn remove_waker<T>(&mut self, handle: &T)
-    where
-        T: Eq + Hash,
-        WakerExt: std::borrow::Borrow<T>,
-    {
-        self.0.borrow_mut().remove(handle);
-    }
+// #[derive(Default, Debug)]
+// pub struct WakerSet(Rc<RefCell<HashSet<WakerExt>>>);
 
-    pub fn contains<T>(&self, handle: &T) -> bool
-    where
-        T: Eq + Hash,
-        WakerExt: std::borrow::Borrow<T>,
-    {
-        self.0.borrow().contains(handle)
-    }
+// impl WakerSet {
+//     pub fn add_waker(&mut self, waker: Waker) {
+//         self.0.borrow_mut().insert(waker.into());
+//     }
 
-    pub fn drain(&mut self) -> Vec<Waker> {
-        self.0
-            .borrow_mut()
-            .drain()
-            .map(|waker_ext| waker_ext.0)
-            .collect()
-    }
+//     #[allow(unused)]
+//     pub fn remove_waker<T>(&mut self, handle: &T)
+//     where
+//         T: Eq + Hash,
+//         WakerExt: std::borrow::Borrow<T>,
+//     {
+//         self.0.borrow_mut().remove(handle);
+//     }
 
-    pub fn pop(&mut self) -> Option<Waker> {
-        let tid = self
-            .0
-            .borrow()
-            .iter()
-            .next()
-            .map(|waker_ext| waker_ext.tid.clone());
+//     pub fn contains<T>(&self, handle: &T) -> bool
+//     where
+//         T: Eq + Hash,
+//         WakerExt: std::borrow::Borrow<T>,
+//     {
+//         self.0.borrow().contains(handle)
+//     }
 
-        if let Some(tid) = tid {
-            self.0.borrow_mut().take(&tid).map(|waker_ext| waker_ext.0)
-        } else {
-            None
-        }
-    }
-}
+//     pub fn drain(&mut self) -> Vec<Waker> {
+//         self.0
+//             .borrow_mut()
+//             .drain()
+//             .map(|waker_ext| waker_ext.0)
+//             .collect()
+//     }
+
+//     pub fn pop(&mut self) -> Option<Waker> {
+//         let tid = self
+//             .0
+//             .borrow()
+//             .iter()
+//             .next()
+//             .map(|waker_ext| waker_ext.tid.clone());
+
+//         if let Some(tid) = tid {
+//             self.0.borrow_mut().take(&tid).map(|waker_ext| waker_ext.0)
+//         } else {
+//             None
+//         }
+//     }
+// }
 
 // Waker增强，方便被获取Waker指向Task的一些属性信息及加入到HashSet中
-pub struct WakerExt(pub Waker);
+pub struct WakerExt(Waker);
 
 impl Deref for WakerExt {
     type Target = TaskAttr;
@@ -96,10 +100,22 @@ impl From<Waker> for WakerExt {
     }
 }
 
+impl From<WakerExt> for Waker {
+    fn from(waker_ext: WakerExt) -> Self {
+        waker_ext.0
+    }
+}
+
 // 根据HashSet::contain协议，如果要求TaskId可以作为参数，则需要实现Borrow<TaskId>
 impl std::borrow::Borrow<TaskId> for WakerExt {
     fn borrow(&self) -> &TaskId {
         &self.tid
+    }
+}
+
+impl ToBorrow<TaskId> for WakerExt {
+    fn to_borrow(&self) -> TaskId {
+        self.tid.clone()
     }
 }
 

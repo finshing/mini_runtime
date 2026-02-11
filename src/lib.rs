@@ -8,6 +8,7 @@ use crate::{
 use std::time;
 use std::{io::Write, pin::Pin};
 
+pub mod collections;
 pub mod config;
 pub(crate) mod helper;
 pub(crate) mod io_event;

@@ -1,13 +1,16 @@
-use std::{cell::UnsafeCell, sync::Once};
+use std::{cell::RefCell, sync::Once};
 
 use crate::{
     runtime::add_waker,
-    task::{TaskAttr, waker_ext::WakerSet},
+    task::{
+        TaskAttr,
+        waker_ext::{WakerSet, WakerSetDropper},
+    },
 };
 
 #[derive(Default)]
 pub struct Notifier {
-    waiting_wakers: UnsafeCell<WakerSet>,
+    waiting_wakers: WakerSet,
 }
 
 impl Notifier {
@@ -16,29 +19,26 @@ impl Notifier {
     }
 
     pub async fn wait(&self) {
-        NotifierWaiter::new(self).await
+        NotifierWaiter::new(self).await;
     }
 
     pub fn notify_one(&self) {
-        if let Some(waker) = self.waiting_wakers().pop() {
-            add_waker(waker);
+        if let Some(waker_ext) = self.waiting_wakers.pop() {
+            add_waker(waker_ext.into());
         }
     }
 
     pub fn notify_all(&self) {
-        for waker in self.waiting_wakers().drain() {
-            add_waker(waker);
+        for waker_ext in self.waiting_wakers.drain() {
+            add_waker(waker_ext.into());
         }
-    }
-
-    fn waiting_wakers(&self) -> &mut WakerSet {
-        unsafe { &mut *self.waiting_wakers.get() }
     }
 }
 
 pub struct NotifierWaiter<'a> {
     notifier: &'a Notifier,
     once: Once,
+    _dropper: RefCell<Option<WakerSetDropper>>,
 }
 
 impl<'a> NotifierWaiter<'a> {
@@ -46,6 +46,7 @@ impl<'a> NotifierWaiter<'a> {
         Self {
             notifier,
             once: Once::new(),
+            _dropper: RefCell::new(None),
         }
     }
 }
@@ -58,13 +59,16 @@ impl<'a> Future for NotifierWaiter<'a> {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         self.once.call_once(|| {
-            self.notifier.waiting_wakers().add_waker(cx.waker().clone());
+            let dropper = self
+                .notifier
+                .waiting_wakers
+                .add_with_dropper(cx.waker().clone().into());
+            self._dropper.borrow_mut().replace(dropper);
         });
 
-        let tid = unsafe { TaskAttr::from_raw_data(cx.waker().data()) }
-            .tid
-            .clone();
-        if self.notifier.waiting_wakers().contains(&tid) {
+        let tid = &unsafe { TaskAttr::from_raw_data(cx.waker().data()) }.tid;
+        // notifier在进行通知的时候会移除相应的唤醒器
+        if self.notifier.waiting_wakers.contains(tid) {
             std::task::Poll::Pending
         } else {
             std::task::Poll::Ready(())
@@ -92,7 +96,7 @@ mod tests {
         }
 
         for _ in 0..5 {
-            sleep(time::Duration::from_millis(100)).await;
+            sleep(time::Duration::from_millis(200)).await;
             notifier.notify_one();
         }
 
@@ -108,7 +112,7 @@ mod tests {
         let nb_c = nb.clone();
 
         spawn!(async move {
-            for _ in 0..5 {
+            for _ in 0..10 {
                 na.wait().await;
                 log::info!("B");
                 nb.notify_one();
@@ -116,7 +120,7 @@ mod tests {
         });
 
         spawn!(async move {
-            for _ in 0..5 {
+            for _ in 0..10 {
                 na_c.notify_one();
                 log::info!("A");
                 nb_c.wait().await;
