@@ -2,17 +2,19 @@ use std::{
     cell::UnsafeCell,
     ops::{Deref, DerefMut},
     sync::atomic::{AtomicBool, Ordering},
-    task::Waker,
 };
 
-use crate::{runtime::add_waker, task::waker_ext::WakerSet};
+use crate::{
+    runtime::add_waker,
+    task::waker_ext::{WakerSet, WakerSetDropper},
+};
 
 pub struct AsyncMutex<T> {
     // 主要使用原子类型的内部可变性
     occupied: AtomicBool,
 
     // 等待中的任务
-    waiting_wakers: UnsafeCell<WakerSet>,
+    waiting_wakers: WakerSet,
 
     data: UnsafeCell<T>,
 }
@@ -21,7 +23,7 @@ impl<T> AsyncMutex<T> {
     pub fn new(value: T) -> Self {
         Self {
             occupied: AtomicBool::new(false),
-            waiting_wakers: UnsafeCell::new(WakerSet::default()),
+            waiting_wakers: WakerSet::default(),
             data: UnsafeCell::new(value),
         }
     }
@@ -31,27 +33,20 @@ impl<T> AsyncMutex<T> {
         (&mut guard).await;
         guard
     }
-
-    unsafe fn waiting_wakers(&self) -> &mut WakerSet {
-        unsafe { &mut *self.waiting_wakers.get() }
-    }
-
-    fn add_waiting_waker(&self, waker: Waker) {
-        unsafe { self.waiting_wakers().add_waker(waker) };
-    }
-
-    fn pop_waker(&self) -> Option<Waker> {
-        unsafe { self.waiting_wakers().pop() }
-    }
 }
 
 pub struct AsyncMutexGuard<'a, T> {
     mtx: &'a AsyncMutex<T>,
+    // 如果是等待锁的释放，则需要注意在部分场景下可能存在提前drop的情况（如select时），需要保证在WakerSet中的正常释放
+    _dropper: Option<WakerSetDropper>,
 }
 
 impl<'a, T> AsyncMutexGuard<'a, T> {
     fn new(mtx: &'a AsyncMutex<T>) -> Self {
-        Self { mtx }
+        Self {
+            mtx,
+            _dropper: None,
+        }
     }
 }
 
@@ -82,7 +77,11 @@ impl<T> Future for AsyncMutexGuard<'_, T> {
             .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
             .is_err()
         {
-            self.mtx.add_waiting_waker(cx.waker().clone());
+            let dropper = self
+                .mtx
+                .waiting_wakers
+                .add_with_dropper(cx.waker().clone().into());
+            self.get_mut()._dropper.replace(dropper);
             std::task::Poll::Pending
         } else {
             // 抢占成功
@@ -93,16 +92,15 @@ impl<T> Future for AsyncMutexGuard<'_, T> {
 
 impl<T> Drop for AsyncMutexGuard<'_, T> {
     fn drop(&mut self) {
-        // 释放占用
-        assert_eq!(
-            self.mtx
-                .occupied
-                .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed),
-            Ok(true)
-        );
-
-        if let Some(waker) = self.mtx.pop_waker() {
-            add_waker(waker);
+        // 在进行锁释放的场景下，需要重新唤醒一个等待的任务
+        if self
+            .mtx
+            .occupied
+            .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+            && let Some(waker_ext) = self.mtx.waiting_wakers.pop()
+        {
+            add_waker(waker_ext.into());
         }
     }
 }

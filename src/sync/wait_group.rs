@@ -1,5 +1,5 @@
 use std::{
-    cell::UnsafeCell,
+    cell::RefCell,
     sync::atomic::{AtomicUsize, Ordering},
     task::Waker,
 };
@@ -11,7 +11,7 @@ pub struct WaitGroup {
     count: AtomicUsize,
 
     // 只会等待一个任务
-    waiting_waker: UnsafeCell<Option<Waker>>,
+    waiting_waker: RefCell<Option<Waker>>,
 }
 
 impl WaitGroup {
@@ -39,11 +39,11 @@ impl WaitGroup {
     }
 
     fn take_waker(&self) -> Option<Waker> {
-        unsafe { (&mut *self.waiting_waker.get()).take() }
+        self.waiting_waker.borrow_mut().take()
     }
 
     fn replace_waker(&self, waker: Waker) {
-        unsafe { (&mut *self.waiting_waker.get()).replace(waker) };
+        self.waiting_waker.borrow_mut().replace(waker);
     }
 }
 

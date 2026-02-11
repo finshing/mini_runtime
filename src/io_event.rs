@@ -5,7 +5,10 @@ use mio::Token;
 use crate::{
     result::Result,
     runtime::reregister,
-    task::{TaskAttr, waker_ext::WakerSet},
+    task::{
+        TaskAttr,
+        waker_ext::{WakerExt, WakerSet},
+    },
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -68,8 +71,8 @@ impl IoEvent {
     // 添加等待事件的Waker
     pub fn wait(&mut self, event: Event, waker: Waker) {
         match event {
-            Event::Read => self.read_wakers.add_waker(waker),
-            Event::Write => self.write_wakers.add_waker(waker),
+            Event::Read => self.read_wakers.add(waker.into()),
+            Event::Write => self.write_wakers.add(waker.into()),
         };
     }
 
@@ -77,10 +80,10 @@ impl IoEvent {
     pub fn read_events(&mut self, event: &mio::event::Event) -> Vec<Waker> {
         let mut wakers: Vec<Waker> = Vec::new();
         if event.is_readable() {
-            wakers.extend(self.read_wakers.drain());
+            wakers.extend(self.read_wakers.drain().into_iter().map(WakerExt::into));
         }
         if event.is_writable() {
-            wakers.extend(self.write_wakers.drain());
+            wakers.extend(self.write_wakers.drain().into_iter().map(WakerExt::into));
         }
 
         wakers

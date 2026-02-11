@@ -12,7 +12,7 @@ use mini_runtime::{
 async fn main() -> Result<()> {
     let start_at = time::Instant::now();
     let wg = WaitGroup::new();
-    for i in 0..1000i64 {
+    for i in 0..100i64 {
         // spawn!(call((i - 5).pow(2) * 10, wg.add()));
         spawn!(call2(i as usize, wg.add()));
     }

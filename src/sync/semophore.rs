@@ -1,17 +1,22 @@
 use std::{
-    cell::UnsafeCell,
-    sync::atomic::{AtomicUsize, Ordering},
-    task::Waker,
+    cell::RefCell,
+    sync::{
+        Once,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
-use crate::{runtime::add_waker, task::waker_ext::WakerSet};
+use crate::{
+    runtime::add_waker,
+    task::waker_ext::{WakerSet, WakerSetDropper},
+};
 
 pub struct AsyncSemophore {
     capacity: usize,
 
     count: AtomicUsize,
 
-    waiting_wakers: UnsafeCell<WakerSet>,
+    waiting_wakers: WakerSet,
 }
 
 impl AsyncSemophore {
@@ -19,7 +24,7 @@ impl AsyncSemophore {
         Self {
             capacity,
             count: AtomicUsize::new(0),
-            waiting_wakers: UnsafeCell::new(WakerSet::default()),
+            waiting_wakers: WakerSet::default(),
         }
     }
 
@@ -28,25 +33,24 @@ impl AsyncSemophore {
         (&mut guard).await;
         guard
     }
-
-    fn add_waiting_waker(&self, waker: Waker) {
-        unsafe {
-            (&mut *self.waiting_wakers.get()).add_waker(waker);
-        }
-    }
-
-    fn pop_waker(&self) -> Option<Waker> {
-        unsafe { (&mut *self.waiting_wakers.get()).pop() }
-    }
 }
 
 pub struct AsyncSemophoreGuard<'a> {
     semophore: &'a AsyncSemophore,
+    once: Once,
+    // 是否获取到信号量：在没有获取到信号量的时候被删除不需要进行信号量的释放
+    fetched: bool,
+    _dropper: RefCell<Option<WakerSetDropper>>,
 }
 
 impl<'a> AsyncSemophoreGuard<'a> {
     fn new(semophore: &'a AsyncSemophore) -> Self {
-        Self { semophore }
+        Self {
+            semophore,
+            once: Once::new(),
+            fetched: false,
+            _dropper: RefCell::new(None),
+        }
     }
 }
 
@@ -57,11 +61,19 @@ impl<'a> Future for AsyncSemophoreGuard<'a> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
+        // 在信号量已满的情况下，加入等待队列中
         if self.semophore.count.load(Ordering::Relaxed) == self.semophore.capacity {
-            self.semophore.add_waiting_waker(cx.waker().clone());
+            self.once.call_once(|| {
+                let dropper = self
+                    .semophore
+                    .waiting_wakers
+                    .add_with_dropper(cx.waker().clone().into());
+                self._dropper.borrow_mut().replace(dropper);
+            });
             std::task::Poll::Pending
         } else {
             self.semophore.count.fetch_add(1, Ordering::Relaxed);
+            self.get_mut().fetched = true;
             std::task::Poll::Ready(())
         }
     }
@@ -69,9 +81,12 @@ impl<'a> Future for AsyncSemophoreGuard<'a> {
 
 impl<'a> Drop for AsyncSemophoreGuard<'a> {
     fn drop(&mut self) {
-        self.semophore.count.fetch_sub(1, Ordering::Relaxed);
-        if let Some(waker) = self.semophore.pop_waker() {
-            add_waker(waker);
+        // 在获取到信号量的时候需要进行释放
+        if self.fetched {
+            self.semophore.count.fetch_sub(1, Ordering::Relaxed);
+            if let Some(waker_ext) = self.semophore.waiting_wakers.pop() {
+                add_waker(waker_ext.into());
+            }
         }
     }
 }
@@ -89,7 +104,7 @@ mod tests {
         async fn inner(semophore: Rc<AsyncSemophore>, num: usize) {
             let _guard = semophore.aquire().await;
             log::info!("get num {}", num);
-            sleep(time::Duration::from_millis(200)).await;
+            sleep(time::Duration::from_millis(500)).await;
         }
 
         for i in 0..10 {
