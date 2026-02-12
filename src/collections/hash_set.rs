@@ -23,7 +23,7 @@ pub struct HashSetExt<T: Eq + Hash>(ShareMutable<HashSet<T>>);
 
 impl<T: Eq + Hash> HashSetExt<T> {
     pub fn add(&self, elem: T) {
-        self.0.get_mut().insert(elem);
+        self.0.borrow_mut().insert(elem);
     }
 
     pub fn add_with_dropper<H>(&self, elem: T) -> HashSetExtDropper<T, H>
@@ -44,7 +44,7 @@ impl<T: Eq + Hash> HashSetExt<T> {
         H: Eq + Hash,
         T: std::borrow::Borrow<H>,
     {
-        self.0.get_mut().take(handle)
+        self.0.borrow_mut().take(handle)
     }
 
     pub fn contains<H>(&self, handle: &H) -> bool
@@ -52,7 +52,7 @@ impl<T: Eq + Hash> HashSetExt<T> {
         H: Eq + Hash,
         T: std::borrow::Borrow<H>,
     {
-        self.0.get().contains(handle)
+        self.0.borrow().contains(handle)
     }
 
     /*
@@ -64,7 +64,7 @@ impl<T: Eq + Hash> HashSetExt<T> {
         T: ToBorrow<H>,
     {
         // 此处必须拿到所有权，如果拿到的是引用，会导致Ref的生命周期边长，最终和RefMut发生冲突
-        let handle = self.0.get().iter().next().map(ToBorrow::to_borrow);
+        let handle = self.0.borrow().iter().next().map(ToBorrow::to_borrow);
 
         if let Some(handle) = handle {
             self.remove(&handle)
@@ -74,7 +74,7 @@ impl<T: Eq + Hash> HashSetExt<T> {
     }
 
     pub fn drain(&self) -> Vec<T> {
-        self.0.get_mut().drain().collect()
+        self.0.borrow_mut().drain().collect()
     }
 }
 
