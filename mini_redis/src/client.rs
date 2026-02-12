@@ -1,4 +1,4 @@
-use mini_runtime::web::client::Client;
+use mini_runtime::web::client::{Client, ClientBuilder};
 
 use crate::{receive, request::Request, response::Response, result::RedisResult, send};
 
@@ -9,7 +9,7 @@ pub struct RedisClient {
 impl RedisClient {
     pub fn new(ip: &str, port: usize) -> RedisResult<Self> {
         Ok(Self {
-            client: Client::connect(ip, port)?,
+            client: ClientBuilder::new(ip, port).connect()?,
         })
     }
 
