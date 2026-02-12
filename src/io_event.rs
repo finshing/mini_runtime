@@ -90,8 +90,8 @@ impl IoEvent {
         let task_attr = unsafe { TaskAttr::from_raw_data(waker.data()) };
         // 就绪的waker都已在poll的时候被取出（注意这里使用!取反）
         !match event {
-            Event::Read => self.read_wakers.contains(&task_attr.tid),
-            Event::Write => self.write_wakers.contains(&task_attr.tid),
+            Event::Read => self.read_wakers.contains(task_attr.get_tid()),
+            Event::Write => self.write_wakers.contains(task_attr.get_tid()),
         }
     }
 }
