@@ -12,3 +12,4 @@ backtrace = "0.3"
 rt_entry = { path = "./rt_entry" }
 mio = { version = "0.8.8", features = ["os-poll", "net"] }
 memchr = "2.7"
+signal-hook = "0.3.1"

@@ -2,46 +2,64 @@ use std::rc::Rc;
 
 use crate::{
     config::READ_BUF_SIZE,
+    err_log,
+    helper::take_vec_at,
     io_ext::{
         read::{TAsyncBufRead, TAsyncRead},
         write::TAsyncWrite,
     },
-    result::Result,
+    result::{ErrorType, Result},
+    select,
     sync::mutex::AsyncMutex,
     tcp::stream::Stream,
+    timeout::ConnTimeout,
 };
 
 pub type Conn = Rc<AsyncMutex<_Conn>>;
 
-pub fn new_conn(tcp_stream: mio::net::TcpStream) -> Result<Conn> {
-    Ok(Rc::new(AsyncMutex::new(_Conn::new(tcp_stream)?)))
+pub fn new_conn(tcp_stream: mio::net::TcpStream, timeout: ConnTimeout) -> Result<Conn> {
+    Ok(Rc::new(AsyncMutex::new(_Conn::new(tcp_stream, timeout)?)))
 }
 
 pub struct _Conn {
     stream: Stream,
-
     buf: Vec<u8>,
+    timeout: ConnTimeout,
 }
 
 impl _Conn {
-    pub fn new(tcp_stream: mio::net::TcpStream) -> Result<Self> {
+    pub fn new(tcp_stream: mio::net::TcpStream, timeout: ConnTimeout) -> Result<Self> {
         Ok(Self {
             stream: Stream::new(tcp_stream)?,
             buf: Vec::new(),
+            timeout,
         })
     }
 
     fn take(&mut self, at: usize) -> Vec<u8> {
         assert!(self.buf.len() >= at);
 
-        let left = self.buf.split_off(at);
-        std::mem::replace(&mut self.buf, left)
+        take_vec_at(&mut self.buf, at)
     }
 }
 
 impl TAsyncRead for _Conn {
     fn ready_to_read(&mut self) -> crate::BoxedFuture<'_, ()> {
-        self.stream.ready_to_read()
+        Box::pin(async {
+            select! {
+                _ = self.timeout.timeout() => {
+                    return Err(ErrorType::Timeout.into());
+                },
+                _ = self.timeout.read_timeout() => {
+                    return Err(ErrorType::ReadTimeout.into());
+                },
+                result = self.stream.ready_to_read() => {
+                    err_log!(result, ".ready_to_read() failed")?;
+                }
+            }
+
+            Ok(())
+        })
     }
 
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
@@ -74,7 +92,21 @@ impl TAsyncBufRead for _Conn {
 
 impl TAsyncWrite for _Conn {
     fn ready_to_write(&mut self) -> crate::BoxedFuture<'_, ()> {
-        self.stream.ready_to_write()
+        Box::pin(async {
+            select! {
+                _ = self.timeout.timeout() =>  {
+                    return Err(ErrorType::Timeout.into());
+                },
+                _ = self.timeout.write_timeout() => {
+                    return Err(ErrorType::WriteTimeout.into());
+                },
+                result = self.stream.ready_to_write() => {
+                    err_log!(result, ".ready_to_write() failed")?;
+                }
+            }
+
+            Ok(())
+        })
     }
 
     fn write(&mut self, data: &[u8]) -> Result<usize> {

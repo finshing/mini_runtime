@@ -3,9 +3,10 @@ use std::time;
 use std::task::Waker;
 
 use crate::{
+    collections::box_ptr_set::BoxPtrSetDropper,
     io_event::{Event, IoEvent},
     result::Result,
-    timer::{PriorityTimerQueue, Timer},
+    timer::PriorityTimerQueue,
 };
 
 pub struct Poller {
@@ -51,8 +52,8 @@ impl Poller {
         wakers
     }
 
-    pub fn add_timer(&mut self, timer: Timer) {
-        self.timer_queue.add_timer(timer);
+    pub fn add_timer(&mut self, wake_at: time::Instant, waker: Waker) -> BoxPtrSetDropper<Waker> {
+        self.timer_queue.add_timer(wake_at, waker)
     }
 
     pub fn register<S: mio::event::Source>(

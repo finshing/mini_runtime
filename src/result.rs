@@ -29,13 +29,13 @@ impl Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "error {:?}:\n{:?}", self.type_, self.bt)
+        writeln!(f, "{:?}:\n{:?}", self.type_, self.bt)
     }
 }
 
 impl Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "error {:?}", self.type_)
+        write!(f, "{:?}", self.type_)
     }
 }
 
@@ -43,6 +43,9 @@ impl Debug for Error {
 pub enum ErrorType {
     Eof,
     Blocked,
+    Timeout,
+    ReadTimeout,
+    WriteTimeout,
     IoError(io::Error),
     RuntimeError(String),
 }

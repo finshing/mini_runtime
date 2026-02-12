@@ -3,6 +3,7 @@
 
 use crate::{
     runtime::{can_finish, get_waker, wait},
+    signal::signal_handler,
     timer::Sleeper,
 };
 use std::time;
@@ -17,13 +18,16 @@ pub mod macros;
 pub(crate) mod poller;
 pub mod result;
 pub mod runtime;
+pub(crate) mod signal;
 pub mod sync;
 pub(crate) mod task;
 pub mod tcp;
+pub(crate) mod timeout;
 pub(crate) mod timer;
 pub mod web;
 
 pub use helper::UPSafeCell;
+pub use task::{TaskAttr, TaskStatus};
 
 use chrono::Local;
 use log::{Level, LevelFilter};
@@ -68,6 +72,7 @@ pub fn sleep(delay: time::Duration) -> Sleeper {
 
 // 运行直到无运行中的任务时候
 pub fn run() {
+    signal_handler();
     loop {
         while let Some(waker) = get_waker() {
             waker.wake();
