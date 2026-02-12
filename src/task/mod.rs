@@ -2,29 +2,87 @@ pub mod task_id;
 pub mod waker_ext;
 
 use std::{
-    cell::RefCell,
-    mem::ManuallyDrop,
     pin::Pin,
-    rc::Rc,
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
-use crate::task::task_id::{TaskId, alloc_id};
+use crate::{
+    collections::ShareMutable,
+    task::task_id::{TaskId, alloc_id},
+};
+
+#[derive(Debug)]
+pub enum TaskStatus {
+    Running,
+    Cancelled,
+    Completed,
+}
+
+impl TaskStatus {
+    #[inline]
+    fn cancelled(&self) -> bool {
+        matches!(self, Self::Cancelled)
+    }
+
+    #[inline]
+    fn finished(&self) -> bool {
+        matches!(self, Self::Cancelled | Self::Completed)
+    }
+}
 
 #[derive(Debug)]
 // 任务属性，避免泛型带来的反解析问题
 pub struct TaskAttr {
-    pub tid: TaskId,
+    tid: TaskId,
+    // 支持共享状态的修改或独立状态的修改
+    status: ShareMutable<TaskStatus>,
 }
 
 impl TaskAttr {
     fn new() -> Self {
-        TaskAttr { tid: alloc_id() }
+        TaskAttr {
+            tid: alloc_id(),
+            status: ShareMutable::new(TaskStatus::Running),
+        }
     }
 
+    /// # Safety
+    ///
     // 通过Waker::data()反解析得到任务的TaskAttr
     pub unsafe fn from_raw_data(data: *const ()) -> &'static mut Self {
         unsafe { &mut *(data as *const Self as *mut _) }
+    }
+
+    pub fn get_tid(&self) -> &TaskId {
+        &self.tid
+    }
+
+    // 共享状态修改
+    pub fn update_status(&self, status: TaskStatus) {
+        *self.status.borrow_mut() = status;
+    }
+
+    // 单独状态修改
+    pub fn set_status(&mut self, status: TaskStatus) {
+        self.status = ShareMutable::new(status);
+    }
+
+    #[allow(unused)]
+    pub fn cancelled(&self) -> bool {
+        self.status.borrow().cancelled()
+    }
+
+    pub fn finished(&self) -> bool {
+        self.status.borrow().finished()
+    }
+}
+
+impl Clone for TaskAttr {
+    fn clone(&self) -> Self {
+        Self {
+            tid: self.tid.clone(),
+            status: self.status.clone(),
+        }
     }
 }
 
@@ -32,33 +90,54 @@ pub trait TTaskClear {
     fn clear(&self);
 }
 
+struct TaskInner<F: Future, C: TTaskClear> {
+    result: Option<F::Output>,
+    fut: Pin<Box<F>>,
+    clear: C,
+}
+
+impl<F: Future, C: TTaskClear> Drop for TaskInner<F, C> {
+    fn drop(&mut self) {
+        self.clear.clear();
+    }
+}
+
 #[repr(C)]
 pub struct Task<F: Future, C: TTaskClear> {
     attr: TaskAttr,
-    result: RefCell<Option<F::Output>>,
-    fut: Pin<Box<F>>,
-    clear: C,
+    inner: ShareMutable<TaskInner<F, C>>,
 }
 
 impl<F: Future, C: TTaskClear> Task<F, C> {
     pub fn new_waker(f: F, mut init_factory: impl FnMut(TaskId) -> C) -> Waker {
         let attr = TaskAttr::new();
         let clear = init_factory(attr.tid.clone());
-        let task = Rc::new(Self {
+        let task = Box::new(Self {
             attr,
-            result: RefCell::new(None),
-            fut: Box::pin(f),
-            clear,
+            inner: ShareMutable::new(TaskInner {
+                result: None,
+                fut: Box::pin(f),
+                clear,
+            }),
         });
 
-        unsafe { Waker::new(Rc::into_raw(task) as *const (), Self::waker_vtable()) }
+        unsafe { Waker::new(Box::into_raw(task) as *const (), Self::waker_vtable()) }
     }
 
-    // 引用计数加一
+    /*
+     * 每次clone后data都指向一个的独立的副本（虽然副本里也是各种共享指针）
+     * 这样就可以对data指向的副本做独立的处理而不会影响其它对象
+     */
     fn clone(data: *const ()) -> RawWaker {
-        let task = ManuallyDrop::new(unsafe { Rc::from_raw(data as *const Self) });
-        let _task_cloned = task.clone();
-        RawWaker::new(data, Self::waker_vtable())
+        // 从Box::into_raw的源码可知获取到的就是包裹的数据在堆上的地址，因此可以直接解引用使用
+        let task = unsafe { &*(data as *const Self) };
+        // 需要将新副本仍然分配到堆上
+        let task_cloned = Box::new(task.clone());
+        // 新副本被用于clone的新对象
+        RawWaker::new(
+            Box::into_raw(task_cloned) as *const (),
+            Self::waker_vtable(),
+        )
     }
 
     // 需要保证自身被消费掉
@@ -69,19 +148,25 @@ impl<F: Future, C: TTaskClear> Task<F, C> {
 
     fn wake_by_ref(data: *const ()) {
         let task = unsafe { &mut *(data as *mut Self) };
+        if task.attr.finished() {
+            log::debug!("task has finished");
+            return;
+        }
 
         // 构造cx，并通过Future::poll驱动异步的执行
         // 这虽然用到了clone，但之后又会被drop，因此可以保证Rc<Task<F>>的引用计数不发生变化
         let waker = unsafe { Waker::from_raw(Self::clone(data)) };
         let mut cx = Context::from_waker(&waker);
-        if let Poll::Ready(result) = task.fut.as_mut().poll(&mut cx) {
-            task.result.borrow_mut().replace(result);
+        let mut task_inner = task.inner.borrow_mut();
+        if let Poll::Ready(result) = task_inner.fut.as_mut().poll(&mut cx) {
+            task.attr.update_status(TaskStatus::Completed);
+            task_inner.result.replace(result);
         }
     }
 
     // 引用计数减一，并保证资源正确释放
     fn drop(data: *const ()) {
-        let _ = unsafe { Rc::from_raw(data as *const Self) };
+        let _ = unsafe { Box::from_raw(data as *mut Self) };
     }
 
     fn waker_vtable() -> &'static RawWakerVTable {
@@ -94,8 +179,11 @@ impl<F: Future, C: TTaskClear> Task<F, C> {
     }
 }
 
-impl<F: Future, C: TTaskClear> Drop for Task<F, C> {
-    fn drop(&mut self) {
-        self.clear.clear();
+impl<F: Future, C: TTaskClear> Clone for Task<F, C> {
+    fn clone(&self) -> Self {
+        Self {
+            attr: self.attr.clone(),
+            inner: self.inner.clone(),
+        }
     }
 }

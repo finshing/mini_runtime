@@ -1,20 +1,28 @@
 use std::{
+    cell::RefCell,
     collections::BinaryHeap,
     sync::Once,
     task::Waker,
     time::{self, Instant},
 };
 
-use crate::runtime::add_timer;
+use crate::{
+    collections::box_ptr_set::{BoxPtrSet, BoxPtrSetDropper, SetPtr},
+    runtime::{add_timer, can_finish},
+};
 
 #[derive(Default)]
 pub(crate) struct PriorityTimerQueue {
     inner: BinaryHeap<Timer>,
+    set: BoxPtrSet<Waker>,
 }
 
 impl PriorityTimerQueue {
-    pub fn add_timer(&mut self, timer: Timer) {
-        self.inner.push(timer);
+    pub fn add_timer(&mut self, wake_at: time::Instant, waker: Waker) -> BoxPtrSetDropper<Waker> {
+        let set_ptr = self.set.insert(waker);
+        self.inner.push(Timer::new(wake_at, set_ptr));
+
+        self.set.build_dropper(set_ptr)
     }
 
     pub fn get_wakers(&mut self) -> Vec<Waker> {
@@ -23,25 +31,37 @@ impl PriorityTimerQueue {
         while let Some(timer) = self.inner.peek()
             && timer.wake_at <= now
         {
-            wakers.push(self.inner.pop().unwrap().waker);
+            let timer = self.inner.pop().unwrap();
+            if let Some(waker) = self.set.remove(&timer.set_ptr) {
+                wakers.push(waker);
+            }
         }
 
         wakers
     }
 
-    pub fn delay(&self) -> Option<time::Duration> {
+    pub fn delay(&mut self) -> Option<time::Duration> {
+        while let Some(timer) = self.inner.peek()
+            && !self.set.contains(&timer.set_ptr)
+        {
+            self.inner.pop();
+        }
+        // 由于涉及到任务的删除操作，所以需要判断是否仍存在其它任务，避免永久的block
+        if can_finish() {
+            return Some(time::Duration::from_secs(0));
+        }
         self.inner.peek().map(|t| t.wake_at - time::Instant::now())
     }
 }
 
 pub struct Timer {
     wake_at: time::Instant,
-    waker: Waker,
+    set_ptr: SetPtr,
 }
 
 impl Timer {
-    pub fn new(wake_at: time::Instant, waker: Waker) -> Self {
-        Self { wake_at, waker }
+    pub fn new(wake_at: time::Instant, set_ptr: SetPtr) -> Self {
+        Self { wake_at, set_ptr }
     }
 }
 
@@ -68,8 +88,8 @@ impl Ord for Timer {
 
 pub struct Sleeper {
     wake_at: time::Instant,
-
     once: Once,
+    _dropper: RefCell<Option<BoxPtrSetDropper<Waker>>>,
 }
 
 impl Sleeper {
@@ -77,6 +97,7 @@ impl Sleeper {
         Self {
             wake_at,
             once: Once::new(),
+            _dropper: RefCell::new(None),
         }
     }
 
@@ -95,7 +116,9 @@ impl Future for Sleeper {
         if time::Instant::now() < self.wake_at {
             // 保证当前timer只会添加一次
             self.once.call_once(|| {
-                add_timer(self.wake_at, cx.waker().clone());
+                self._dropper
+                    .borrow_mut()
+                    .replace(add_timer(self.wake_at, cx.waker().clone()));
             });
             std::task::Poll::Pending
         } else {

@@ -3,6 +3,7 @@ use std::{
     rc::Rc,
 };
 
+pub mod box_ptr_set;
 pub mod hash_set;
 
 #[derive(Debug)]
@@ -19,6 +20,10 @@ impl<T> ShareMutable<T> {
 
     pub fn borrow_mut(&self) -> RefMut<'_, T> {
         self.0.borrow_mut()
+    }
+
+    pub fn strong_count(&self) -> usize {
+        Rc::strong_count(&self.0)
     }
 }
 

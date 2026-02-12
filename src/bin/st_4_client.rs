@@ -5,7 +5,7 @@ use mini_runtime::{
     result::Result,
     sleep,
     sync::wait_group::{WaitGroup, WaitGroupGuard},
-    web::client::Client,
+    web::client::ClientBuilder,
 };
 
 #[rt_entry::main]
@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
 #[allow(unused)]
 async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
     let start_at = time::Instant::now();
-    let client = Client::connect(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)?;
+    let client = ClientBuilder::new(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT).connect()?;
     client
         .writer()
         .lock()
@@ -48,11 +48,11 @@ async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
 
 #[allow(unused)]
 async fn call2(times: usize, _guard: WaitGroupGuard<'_>) -> Result<()> {
-    let client = Client::connect(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)?;
+    let client = ClientBuilder::new(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT).connect()?;
     let writer = client.writer();
     let mut reader = client.reader();
     let mut size = 0usize;
-    for _ in 0..10 {
+    for _ in 0..100 {
         writer
             .lock()
             .await
