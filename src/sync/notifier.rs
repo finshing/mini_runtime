@@ -66,7 +66,7 @@ impl<'a> Future for NotifierWaiter<'a> {
             self._dropper.borrow_mut().replace(dropper);
         });
 
-        let tid = &unsafe { TaskAttr::from_raw_data(cx.waker().data()) }.tid;
+        let tid = unsafe { TaskAttr::from_raw_data(cx.waker().data()) }.get_tid();
         // notifier在进行通知的时候会移除相应的唤醒器
         if self.notifier.waiting_wakers.contains(tid) {
             std::task::Poll::Pending

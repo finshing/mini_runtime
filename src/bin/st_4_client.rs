@@ -52,7 +52,7 @@ async fn call2(times: usize, _guard: WaitGroupGuard<'_>) -> Result<()> {
     let writer = client.writer();
     let mut reader = client.reader();
     let mut size = 0usize;
-    for _ in 0..10 {
+    for _ in 0..100 {
         writer
             .lock()
             .await
