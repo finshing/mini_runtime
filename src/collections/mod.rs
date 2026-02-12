@@ -13,11 +13,11 @@ impl<T> ShareMutable<T> {
         Self(Rc::new(RefCell::new(val)))
     }
 
-    pub fn get(&self) -> Ref<'_, T> {
+    pub fn borrow(&self) -> Ref<'_, T> {
         self.0.borrow()
     }
 
-    pub fn get_mut(&self) -> RefMut<'_, T> {
+    pub fn borrow_mut(&self) -> RefMut<'_, T> {
         self.0.borrow_mut()
     }
 }
