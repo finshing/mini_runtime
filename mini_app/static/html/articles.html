@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Articles</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                font-family: "Microsoft YaHei", sans-serif;
+            }
+            .container {
+                max-width: 800px;
+                margin: 50px auto;
+                padding: 20px;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            /* 新增：动态按钮区域样式 */
+            .options-area {
+                margin-bottom: 20px;
+                padding: 15px;
+                border: 1px solid #e9ecef;
+                border-radius: 4px;
+            }
+            .options-title {
+                margin-bottom: 10px;
+                font-size: 14px;
+                color: #495057;
+            }
+            .option-btn {
+                padding: 8px 16px;
+                margin-right: 10px;
+                margin-bottom: 10px;
+                background-color: #17a2b8;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .option-btn:hover {
+                background-color: #138496;
+            }
+            .option-btn:disabled {
+                background-color: #6c757d;
+                cursor: not-allowed;
+            }
+            .trigger-btn {
+                padding: 10px 20px;
+                background-color: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-bottom: 20px;
+                display: none; /* 隐藏原固定触发按钮，改为动态按钮触发 */
+            }
+            .trigger-btn:hover {
+                background-color: #218838;
+            }
+            .trigger-btn:disabled {
+                background-color: #6c757d;
+                cursor: not-allowed;
+            }
+            .status {
+                margin-bottom: 20px;
+                padding: 10px;
+                border-radius: 4px;
+                font-size: 14px;
+            }
+            .status-idle {
+                background-color: #e9ecef;
+                color: #495057;
+            }
+            .status-loading-values {
+                background-color: #cce5ff;
+                color: #004085;
+            }
+            .status-values-error {
+                background-color: #f8d7da;
+                color: #721c24;
+            }
+            .status-connecting {
+                background-color: #fff3cd;
+                color: #856404;
+            }
+            .status-connected {
+                background-color: #d4edda;
+                color: #155724;
+            }
+            .status-error {
+                background-color: #f8d7da;
+                color: #721c24;
+            }
+            .content-area {
+                min-height: 300px;
+                padding: 15px;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                font-size: 16px;
+                line-height: 1.6;
+                white-space: pre-wrap; /* 保留换行和空格 */
+            }
+            .reconnect-btn {
+                margin-top: 20px;
+                padding: 8px 16px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 10px;
+            }
+            .reconnect-btn:hover {
+                background-color: #0056b3;
+            }
+            .stop-btn {
+                margin-top: 20px;
+                padding: 8px 16px;
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .stop-btn:hover {
+                background-color: #c82333;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <!-- 新增：动态按钮区域 -->
+            <div class="options-area">
+                <div class="options-title">可选参数（点击触发SSE请求）：</div>
+                <div id="optionsBtnContainer"></div>
+            </div>
+
+            <div id="status" class="status status-loading-values">
+                正在加载可选参数列表...
+            </div>
+            <div id="contentArea" class="content-area"></div>
+
+            <!-- 辅助按钮：重新连接/停止连接 -->
+            <button
+                id="reconnectBtn"
+                class="reconnect-btn"
+                style="display: none"
+                onclick="reconnectWithLastValue()"
+            >
+                重新连接
+            </button>
+            <button
+                id="stopBtn"
+                class="stop-btn"
+                style="display: none"
+                onclick="stopSSE()"
+            >
+                停止接收
+            </button>
+        </div>
+
+        <script>
+            // 获取页面元素
+            const statusEl = document.getElementById("status");
+            const contentArea = document.getElementById("contentArea");
+            const optionsBtnContainer = document.getElementById(
+                "optionsBtnContainer",
+            );
+            const reconnectBtn = document.getElementById("reconnectBtn");
+            const stopBtn = document.getElementById("stopBtn");
+
+            const host = "http://localhost:9001";
+
+            // 全局变量
+            let eventSource = null;
+            let lastSelectedValue = null; // 记录最后选中的参数值，用于重新连接
+            let optionButtons = []; // 存储动态按钮实例，用于控制禁用/启用
+
+            // 第一步：页面加载后先请求/values接口获取可选值
+            window.onload = function () {
+                fetchValues();
+            };
+
+            // 请求/values接口并渲染动态按钮
+            async function fetchValues() {
+                try {
+                    statusEl.className = "status status-loading-values";
+                    statusEl.textContent = "正在加载可选参数列表...";
+
+                    // 请求/values接口
+                    const response = await fetch(host + "/article_list", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                    });
+                    if (!response.ok) {
+                        throw new Error(`HTTP错误，状态码：${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    // 验证返回格式
+                    if (!Array.isArray(data.articles)) {
+                        throw new Error("返回数据格式错误，缺少values数组");
+                    }
+
+                    // 渲染动态按钮
+                    renderOptionButtons(data.articles);
+
+                    // 更新状态
+                    statusEl.className = "status status-idle";
+                    statusEl.textContent = `已加载 ${data.articles.length} 个可选参数，点击按钮触发SSE请求`;
+                } catch (error) {
+                    // 处理请求错误
+                    statusEl.className = "status status-values-error";
+                    statusEl.textContent = `加载可选参数失败：${error.message}`;
+                    optionsBtnContainer.innerHTML = `<span style="color: #721c24;">加载失败：${error.message}</span>`;
+                }
+            }
+
+            // 渲染可选参数按钮
+            function renderOptionButtons(values) {
+                optionsBtnContainer.innerHTML = ""; // 清空容器
+                optionButtons = []; // 重置按钮列表
+
+                values.forEach((value) => {
+                    const btn = document.createElement("button");
+                    btn.className = "option-btn";
+                    btn.textContent = value;
+                    btn.dataset.value = value; // 存储参数值到data属性
+                    // 点击按钮触发SSE请求（携带当前值）
+                    btn.addEventListener("click", () => connectSSE(value));
+                    optionsBtnContainer.appendChild(btn);
+                    optionButtons.push(btn);
+                });
+            }
+
+            // 禁用/启用所有可选按钮
+            function setOptionButtonsDisabled(disabled) {
+                optionButtons.forEach((btn) => {
+                    btn.disabled = disabled;
+                });
+            }
+
+            // 连接 SSE 服务的核心函数（携带参数）
+            function connectSSE(selectedValue) {
+                // 记录最后选中的值，用于重新连接
+                lastSelectedValue = selectedValue;
+
+                // 禁用所有可选按钮，防止重复点击
+                setOptionButtonsDisabled(true);
+
+                // 清空内容区域
+                contentArea.innerHTML = "";
+
+                // 隐藏重新连接按钮，显示停止按钮
+                reconnectBtn.style.display = "none";
+                stopBtn.style.display = "inline-block";
+
+                // 更新状态
+                statusEl.className = "status status-connecting";
+                statusEl.textContent = `正在连接 SSE 服务（参数：${selectedValue}）...`;
+
+                // 关闭之前的连接
+                if (eventSource) {
+                    eventSource.close();
+                }
+
+                try {
+                    // 拼接带Query参数的URL
+                    const url = new URL(host + "/completion");
+                    url.searchParams.append("article", selectedValue); // 添加参数key=value，可自定义key
+
+                    // 创建SSE连接
+                    eventSource = new EventSource(url);
+
+                    // 连接成功回调
+                    eventSource.onopen = function () {
+                        statusEl.className = "status status-connected";
+                        statusEl.textContent = `已成功连接 SSE 服务（参数：${selectedValue}），正在接收流式内容...`;
+                    };
+
+                    // 接收消息回调
+                    eventSource.onmessage = function (event) {
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.is_stop) {
+                                stopSSE();
+                            }
+                            if (data.content) {
+                                contentArea.innerHTML += data.content;
+                            }
+                        } catch (parseError) {
+                            console.error(
+                                "解析SSE消息失败:",
+                                parseError,
+                                "原始数据:",
+                                event.data,
+                            );
+                            statusEl.textContent = `接收数据格式异常: ${parseError.message}`;
+                        }
+                    };
+
+                    // 连接错误回调
+                    eventSource.onerror = function (error) {
+                        statusEl.className = "status status-error";
+                        if (eventSource.readyState === EventSource.CLOSED) {
+                            statusEl.textContent = `SSE连接已关闭（参数：${selectedValue}）`;
+                        } else if (
+                            eventSource.readyState === EventSource.CONNECTING
+                        ) {
+                            statusEl.textContent = `尝试重新连接 SSE 服务（参数：${selectedValue}）...`;
+                        } else {
+                            statusEl.textContent = `SSE连接出错（参数：${selectedValue}）: ${error.message || "未知错误"}`;
+                        }
+
+                        // 恢复可选按钮，显示重新连接，隐藏停止按钮
+                        setOptionButtonsDisabled(false);
+                        reconnectBtn.style.display = "inline-block";
+                        stopBtn.style.display = "none";
+
+                        if (eventSource.readyState === EventSource.CLOSED) {
+                            eventSource = null;
+                        }
+                    };
+                } catch (initError) {
+                    statusEl.className = "status status-error";
+                    statusEl.textContent = `初始化SSE连接失败（参数：${selectedValue}）: ${initError.message}`;
+                    // 恢复可选按钮
+                    setOptionButtonsDisabled(false);
+                    reconnectBtn.style.display = "inline-block";
+                    stopBtn.style.display = "none";
+                }
+            }
+
+            // 重新连接（使用最后选中的参数值）
+            function reconnectWithLastValue() {
+                if (!lastSelectedValue) {
+                    statusEl.textContent = "未选择任何参数，无法重新连接";
+                    return;
+                }
+                connectSSE(lastSelectedValue);
+            }
+
+            // 停止SSE连接
+            function stopSSE() {
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+                // 恢复状态和按钮
+                statusEl.className = "status status-idle";
+                statusEl.textContent = `已手动停止SSE连接（最后参数：${lastSelectedValue || "无"}），可点击参数按钮重新开始`;
+                setOptionButtonsDisabled(false);
+                stopBtn.style.display = "none";
+                reconnectBtn.style.display = "none";
+            }
+
+            // 页面关闭时清理连接
+            window.onbeforeunload = function () {
+                if (eventSource) {
+                    eventSource.close();
+                }
+            };
+        </script>
+    </body>
+</html>

@@ -1,0 +1,12 @@
+[package]
+name = "common" 
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+mini_runtime.workspace = true
+rt_entry.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+memchr.workspace = true
+log.workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "cli" 
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+common = { path="../common" }
+mini_runtime.workspace = true
+rt_entry.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+memchr.workspace = true
