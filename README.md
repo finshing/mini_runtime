@@ -8,3 +8,10 @@ Rust单线程异步运行时
 4. 同步能力：异步锁、信号量、WaitGroup
 5. 应用层面的多路复用（类似golang的select），并支持TCP/UDP的超时处理
 6. 简单的HTTP协议、DNS解析等
+
+## mini_app启动
+```
+cd mini_app
+cargo run -p app
+# 用浏览器打开localhost:9001/index网页
+```
