@@ -1,0 +1,14 @@
+[package]
+name = "app" 
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+common = { path="../common" }
+mini_runtime.workspace = true
+rt_entry.workspace = true
+memchr.workspace = true
+lazy_static.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true

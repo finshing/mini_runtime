@@ -93,6 +93,12 @@ impl ConnTimeout {
     }
 }
 
+impl From<std::time::Duration> for ConnTimeout {
+    fn from(dur: std::time::Duration) -> Self {
+        Self::new(Some(dur))
+    }
+}
+
 impl Clone for ConnTimeout {
     fn clone(&self) -> Self {
         Self {

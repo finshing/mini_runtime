@@ -26,8 +26,9 @@ pub(crate) mod timeout;
 pub(crate) mod timer;
 pub mod web;
 
-pub use helper::UPSafeCell;
+pub use helper::{UPSafeCell, take_vec_at};
 pub use task::{TaskAttr, TaskStatus};
+pub use timeout::ConnTimeout;
 
 use chrono::Local;
 use log::{Level, LevelFilter};

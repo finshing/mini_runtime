@@ -85,6 +85,15 @@ pub fn main(args: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
+    _test(args, item, true)
+}
+
+#[proc_macro_attribute]
+pub fn rt_test(args: TokenStream, item: TokenStream) -> TokenStream {
+    _test(args, item, false)
+}
+
+fn _test(args: TokenStream, item: TokenStream, is_crate: bool) -> TokenStream {
     let func: ItemFn = parse_macro_input!(item);
     if func.sig.asyncness.is_none() {
         return error_stream(&func.sig, "should be an async function");
@@ -96,7 +105,7 @@ pub fn test(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let attr = parse_macro_input!(args as EntryAttr);
 
-    let import = import_stream(true);
+    let import = import_stream(is_crate);
     let logger_init = logger_init_stream(&attr);
     let body = body_stream(body, output);
     let expanded = quote! {

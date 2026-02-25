@@ -36,6 +36,10 @@ impl _Conn {
         })
     }
 
+    pub fn set_timeout(&mut self, timeout: ConnTimeout) {
+        self.timeout = timeout;
+    }
+
     fn take(&mut self, at: usize) -> Vec<u8> {
         assert!(self.buf.len() >= at);
 
