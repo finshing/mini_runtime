@@ -16,7 +16,6 @@ pub trait TAsyncWrite {
     fn write(&mut self, data: &[u8]) -> Result<usize>;
 }
 
-#[derive(Clone)]
 pub struct AsyncBufWriter<W: TAsyncWrite> {
     writer: Rc<AsyncMutex<W>>,
 }
@@ -28,6 +27,14 @@ impl<W: TAsyncWrite> AsyncBufWriter<W> {
 
     pub async fn lock(&self) -> _AsyncBufWriterGuard<'_, W> {
         _AsyncBufWriterGuard::new(self).await
+    }
+}
+
+impl<W: TAsyncWrite> Clone for AsyncBufWriter<W> {
+    fn clone(&self) -> Self {
+        Self {
+            writer: self.writer.clone(),
+        }
     }
 }
 

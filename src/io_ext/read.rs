@@ -111,6 +111,14 @@ impl<R: TAsyncBufRead> AsyncReader<R> {
     }
 }
 
+impl<R: TAsyncBufRead> Clone for AsyncReader<R> {
+    fn clone(&self) -> Self {
+        Self {
+            buf_reader: self.buf_reader.clone(),
+        }
+    }
+}
+
 impl<R: TAsyncBufRead> From<Rc<AsyncMutex<R>>> for AsyncReader<R> {
     fn from(reader: Rc<AsyncMutex<R>>) -> Self {
         Self::new(reader)
