@@ -23,7 +23,9 @@ pub struct HashSetExt<T: Eq + Hash>(ShareMutable<HashSet<T>>);
 
 impl<T: Eq + Hash> HashSetExt<T> {
     pub fn add(&self, elem: T) {
-        self.0.borrow_mut().insert(elem);
+        // 此处不能通过insert()进行更新，因为在key存在的时候不会更新新的key
+        // 而这里一般会通过使用结构体的部分字段（句柄）进行是否相同判断
+        self.0.borrow_mut().replace(elem);
     }
 
     pub fn add_with_dropper<H>(&self, elem: T) -> HashSetExtDropper<T, H>
