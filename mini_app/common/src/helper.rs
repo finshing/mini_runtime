@@ -14,6 +14,10 @@ impl<'a> BytesSplitter<'a> {
     pub fn new(raw: &'a [u8], sp: &'a [u8]) -> Self {
         Self { raw, sp }
     }
+
+    pub fn remain(&self) -> &[u8] {
+        self.raw
+    }
 }
 
 impl<'a> Iterator for BytesSplitter<'a> {

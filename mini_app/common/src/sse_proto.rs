@@ -4,7 +4,7 @@ use std::{
 };
 
 use mini_runtime::err_log;
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     helper::{BytesSplitter, slice_to_str},
@@ -39,9 +39,21 @@ impl SSEProto {
         self
     }
 
+    pub fn get_data(&self) -> &str {
+        &self.data.value
+    }
+
+    pub fn get_json_data<T: DeserializeOwned>(&self) -> HttpResult<T> {
+        Ok(serde_json::from_str(self.get_data())?)
+    }
+
     pub fn set_event(&mut self, data: Cow<'_, str>) -> &mut Self {
         self.event.set_value(data.into_owned());
         self
+    }
+
+    pub fn get_event(&self) -> &str {
+        &self.event.value
     }
 
     pub fn set_id(&mut self, data: Cow<'_, str>) -> &mut Self {
@@ -49,9 +61,17 @@ impl SSEProto {
         self
     }
 
+    pub fn get_id(&self) -> &str {
+        &self.id.value
+    }
+
     pub fn set_retry(&mut self, data: Cow<'_, str>) -> &mut Self {
         self.retry.set_value(data.into_owned());
         self
+    }
+
+    pub fn get_retry(&self) -> &str {
+        &self.retry.value
     }
 
     // 解析事件字段
@@ -165,10 +185,7 @@ impl Field {
             .next()
             .ok_or("lack sse field name")
             .map(slice_to_str)??;
-        let value = splitter
-            .next()
-            .ok_or("lack sse field value")
-            .map(slice_to_str)??;
+        let value = slice_to_str(splitter.remain())?;
 
         let field_name = FieldName::from(name)?;
         Ok(Field {
@@ -212,14 +229,15 @@ mod test {
 
     #[test]
     fn test_sse_deserialize() {
-        let value = r#"data: what if
-data: I lost
-data: my way
-event: thought
-tag: invalid_tag
-id:
-retry
-"#;
+        //         let value = r#"data: what if
+        // data: I lost
+        // data: my way
+        // event: thought
+        // tag: invalid_tag
+        // id:
+        // retry
+        // "#;
+        let value = r#"data: {"content":"《背影","is_stop":false}"#;
         let sse_proto = SSEProto::deserialize(value);
         println!("sse_proto: {:?}", sse_proto);
     }

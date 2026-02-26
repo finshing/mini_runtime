@@ -1,40 +1,5 @@
 use std::{string::IntoChars, time};
 
-use serde::Serialize;
-
-#[derive(Serialize)]
-pub struct BadResponse {
-    reason: String,
-}
-
-impl BadResponse {
-    pub fn new(reason: String) -> Self {
-        Self { reason }
-    }
-}
-
-#[derive(Serialize, Debug)]
-pub struct SSEContent {
-    content: String,
-    is_stop: bool,
-}
-
-impl SSEContent {
-    pub fn resume(content: String) -> Self {
-        Self {
-            content,
-            is_stop: false,
-        }
-    }
-
-    pub fn stop() -> Self {
-        Self {
-            content: String::new(),
-            is_stop: true,
-        }
-    }
-}
-
 pub(crate) struct TextRandomSplitter {
     content: IntoChars,
     t: time::Instant,

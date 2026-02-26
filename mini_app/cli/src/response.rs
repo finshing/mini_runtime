@@ -1,5 +1,5 @@
 use common::{
-    CT_EVENT_STREAM, HttpHeader, HttpProtocol, HttpStatus, LFLF, TE_CHUNKED,
+    CRLFCRLF, CT_EVENT_STREAM, HttpHeader, HttpProtocol, HttpStatus, LFLF, TE_CHUNKED,
     helper::{BytesSplitter, slice_to_str},
     http_reader::{
         ChunkedBodyReader, FixedLengthBodyReader, THttpBodyReader, parse_http_header,
@@ -27,7 +27,8 @@ pub struct ClientResponse<R: TAsyncBufRead + 'static> {
 impl<R: TAsyncBufRead + 'static> ClientResponse<R> {
     pub async fn new(mut reader: AsyncReader<R>) -> HttpResult<Self> {
         let (protocol, status) = Self::parse_first_line(reader.read_until_exclusive(CRLF).await?)?;
-        let header = parse_http_header(reader.read_until_exclusive(CRLF).await?)?;
+        let header = parse_http_header(reader.read_until_exclusive(CRLFCRLF).await?)?;
+        log::info!("http header: {:?}", header);
 
         Ok(Self {
             protocol,
@@ -78,7 +79,7 @@ impl<R: TAsyncBufRead + 'static> ClientResponse<R> {
     }
 
     pub fn sse_reader(&self) -> Option<SSEBodyReader<R>> {
-        if self.header().get_content_type() == Some(CT_EVENT_STREAM) {
+        if self.header.get_content_type() == Some(CT_EVENT_STREAM) {
             let reader = ChunkedBodyReader::new(self.reader.clone());
             Some(SSEBodyReader::new(reader))
         } else {
@@ -121,12 +122,19 @@ impl<R: TAsyncBufRead> THttpBodyReader for SSEBodyReader<R> {
         Box::pin(async {
             loop {
                 if let Some(offset) = memmem::find(&self.buf, LFLF.as_bytes()) {
-                    let event_body = take_vec_at(&mut self.buf, offset);
+                    // 需要将结尾的\n\n也取出来，避免下次read时的二次读取（关键）
+                    let mut event_body = take_vec_at(&mut self.buf, offset + 2);
+                    // 删除掉最后的\n\n
+                    unsafe {
+                        event_body.set_len(offset);
+                    }
                     return Ok(event_body);
                 }
                 match self.reader.read().await {
                     Ok(data) => self.buf.extend(data),
-                    Err(e) if e.is_eof() => return Ok(Vec::new()),
+                    Err(e) if e.is_eof() => {
+                        return Ok(Vec::new());
+                    }
                     Err(e) => return Err(e),
                 }
             }

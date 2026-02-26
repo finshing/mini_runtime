@@ -8,15 +8,15 @@ use mini_runtime::{
     err_log,
     io_ext::write::{AsyncBufWriter, TAsyncWrite},
     sync::mutex::AsyncMutex,
-    web::conn::{_Conn, Conn},
+    web::conn::{SharedTcpConn, TcpConn},
 };
 use serde::ser::Serialize;
 
 use crate::helper::load_file;
 
-pub type ServerResponse = Rc<AsyncMutex<_ServerResponse<_Conn>>>;
+pub type ServerResponse = Rc<AsyncMutex<_ServerResponse<TcpConn>>>;
 
-pub fn create_response(conn: Conn, protocol: HttpProtocol) -> ServerResponse {
+pub fn create_response(conn: SharedTcpConn, protocol: HttpProtocol) -> ServerResponse {
     Rc::new(AsyncMutex::new(_ServerResponse::new(conn.into(), protocol)))
 }
 

@@ -9,14 +9,14 @@ use mini_runtime::{
     ConnTimeout,
     web::{
         client::{Client, ClientBuilder},
-        conn::_Conn,
+        conn::TcpConn,
     },
 };
 use serde::Serialize;
 
 use crate::response::ClientResponse;
 
-pub struct ClientRequest {
+pub struct HttpClient {
     method: HttpMethod,
     url: Option<Url>,
     protocol: HttpProtocol,
@@ -26,7 +26,7 @@ pub struct ClientRequest {
 
 const DEFAULT_USER_AGENT: &str = "mini client/1.0";
 
-impl ClientRequest {
+impl HttpClient {
     pub fn set_url(&mut self, url_str: impl AsRef<str>) -> HttpResult<&mut Self> {
         self.url.replace(Url::from(url_str)?);
         Ok(self)
@@ -49,28 +49,30 @@ impl ClientRequest {
 
     pub async fn get(
         &mut self,
-        params: HashMap<String, String>,
-    ) -> HttpResult<ClientResponse<_Conn>> {
-        if let Some(url) = &mut self.url {
+        params: Option<HashMap<String, String>>,
+    ) -> HttpResult<ClientResponse<TcpConn>> {
+        if let Some(params) = params
+            && let Some(url) = &mut self.url
+        {
             url.path.set_params(params);
         }
 
         self.send(HttpMethod::Get, &[]).await
     }
 
-    pub async fn post(&mut self, body: &[u8]) -> HttpResult<ClientResponse<_Conn>> {
+    pub async fn post(&mut self, body: &[u8]) -> HttpResult<ClientResponse<TcpConn>> {
         self.send(HttpMethod::Post, body).await
     }
 
     pub async fn post_json<T: Serialize>(
         &mut self,
         value: &T,
-    ) -> HttpResult<ClientResponse<_Conn>> {
+    ) -> HttpResult<ClientResponse<TcpConn>> {
         self.post(serde_json::to_string(value)?.as_bytes()).await
     }
 
     // 发送chunked请求
-    pub async fn post_batch(&mut self) -> HttpResult<ChunkedTransport> {
+    pub async fn post_chunk(&mut self) -> HttpResult<ChunkedTransport> {
         let client = self.connect(HttpMethod::Post)?;
 
         self.header.set_transfer_encoding(TE_CHUNKED.into());
@@ -82,7 +84,11 @@ impl ClientRequest {
         Ok(ChunkedTransport { client })
     }
 
-    async fn send(&mut self, method: HttpMethod, body: &[u8]) -> HttpResult<ClientResponse<_Conn>> {
+    async fn send(
+        &mut self,
+        method: HttpMethod,
+        body: &[u8],
+    ) -> HttpResult<ClientResponse<TcpConn>> {
         let client = self.connect(method)?;
         self.header
             .set_content_length(body.len().to_string().into())
@@ -129,7 +135,7 @@ impl ClientRequest {
     }
 }
 
-impl Default for ClientRequest {
+impl Default for HttpClient {
     fn default() -> Self {
         Self {
             method: HttpMethod::Get,
@@ -151,7 +157,7 @@ impl ChunkedTransport {
         body_writer.write_chunked_body(body).await
     }
 
-    pub async fn wait_resp(&mut self) -> HttpResult<ClientResponse<_Conn>> {
+    pub async fn wait_resp(&mut self) -> HttpResult<ClientResponse<TcpConn>> {
         self.send_chunk(&[]).await?;
         ClientResponse::new(self.client.reader()).await
     }
