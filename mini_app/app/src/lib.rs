@@ -6,7 +6,7 @@ use common::{
     HttpProtocol, HttpStatus,
     result::{HttpError, HttpResult},
 };
-use mini_runtime::{BoxedFutureWithError, variable_log, web::conn::Conn};
+use mini_runtime::{BoxedFutureWithError, variable_log, web::conn::SharedTcpConn};
 
 use crate::{
     request::{_ServerRequest, ServerRequest},
@@ -15,7 +15,6 @@ use crate::{
 };
 
 pub mod app;
-pub mod config;
 mod helper;
 pub mod request;
 pub mod response;
@@ -23,7 +22,7 @@ pub(crate) mod route;
 
 pub type HttpBoxedFuture<'a, T> = BoxedFutureWithError<'a, T, HttpError>;
 
-pub async fn route_handler(conn: Conn) -> HttpResult<()> {
+pub async fn route_handler(conn: SharedTcpConn) -> HttpResult<()> {
     let request = _ServerRequest::new(conn.clone().into()).await;
     let (path, response) = request
         .as_ref()
@@ -57,7 +56,7 @@ pub async fn route_handler(conn: Conn) -> HttpResult<()> {
 }
 
 async fn request_route(
-    conn: Conn,
+    conn: SharedTcpConn,
     request: HttpResult<ServerRequest>,
     response: ServerResponse,
 ) -> HttpResult<()> {

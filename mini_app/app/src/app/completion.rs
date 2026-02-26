@@ -1,17 +1,21 @@
 use std::time;
 
-use common::{CT_EVENT_STREAM, result::HttpResult};
-use mini_runtime::{sleep, web::conn::_Conn};
+use common::{
+    CT_EVENT_STREAM,
+    dto::{BadResponse, SSEContent},
+    result::HttpResult,
+};
+use mini_runtime::{sleep, web::conn::TcpConn};
 
 use crate::{
-    app::response::{BadResponse, SSEContent, TextRandomSplitter},
+    app::response::TextRandomSplitter,
     helper::load_file,
     request::ServerRequest,
     response::{SSEResponse, ServerResponse},
     route::THttpMethodHandler,
 };
 
-const DEFAULT_ARTICLE: &str = "一直特立独行的猪";
+const DEFAULT_ARTICLE: &str = "一只特立独行的猪";
 
 pub struct CompletionHandler {}
 
@@ -33,7 +37,7 @@ impl CompletionHandler {
                     .await;
             }
         };
-        let mut sse_response: SSEResponse<_Conn> = response
+        let mut sse_response: SSEResponse<TcpConn> = response
             .lock()
             .await
             .update_header(|header| {
@@ -50,7 +54,7 @@ impl CompletionHandler {
                 .write_event(SSEContent::resume(chunk).into())
                 .flush()
                 .await?;
-            sleep(time::Duration::from_millis(10)).await;
+            sleep(time::Duration::from_millis(50)).await;
         }
         sse_response
             .write_event(SSEContent::stop().into())

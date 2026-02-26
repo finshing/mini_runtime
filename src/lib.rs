@@ -2,7 +2,7 @@
 #![allow(clippy::mut_from_ref)]
 
 use crate::{
-    runtime::{can_finish, get_waker, wait},
+    runtime::{can_finish, get_waker, take_finish_cbs, wait},
     signal::signal_handler,
     timer::Sleeper,
 };
@@ -11,6 +11,7 @@ use std::{io::Write, pin::Pin};
 
 pub mod collections;
 pub mod config;
+pub mod dns;
 pub(crate) mod helper;
 pub(crate) mod io_event;
 pub mod io_ext;
@@ -24,9 +25,10 @@ pub(crate) mod task;
 pub mod tcp;
 pub(crate) mod timeout;
 pub(crate) mod timer;
+pub mod udp;
 pub mod web;
 
-pub use helper::{UPSafeCell, take_vec_at};
+pub use helper::{TimerRecord, UPSafeCell, take_vec_at};
 pub use task::{TaskAttr, TaskStatus};
 pub use timeout::ConnTimeout;
 
@@ -85,6 +87,10 @@ pub fn run() {
         }
 
         wait();
+    }
+
+    for cb in take_finish_cbs() {
+        cb();
     }
 
     log::debug!("runtime done");

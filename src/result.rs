@@ -2,6 +2,8 @@ use std::{
     fmt::{Debug, Display},
     io,
     net::AddrParseError,
+    num::ParseIntError,
+    string::FromUtf8Error,
 };
 
 use backtrace::Backtrace;
@@ -48,6 +50,8 @@ pub enum ErrorType {
     WriteTimeout,
     IoError(io::Error),
     RuntimeError(String),
+    ParseError(String),
+    DnsParseFailed(String),
 }
 
 impl From<ErrorType> for Error {
@@ -86,5 +90,17 @@ impl From<&str> for Error {
 impl From<AddrParseError> for Error {
     fn from(e: AddrParseError) -> Self {
         ErrorType::RuntimeError(format!("address parse failed: {}", e)).into()
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(e: FromUtf8Error) -> Self {
+        ErrorType::ParseError(format!("utf8 prase failed - {:?}", e)).into()
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(e: ParseIntError) -> Self {
+        ErrorType::ParseError(format!("int parse failed - {:?}", e)).into()
     }
 }

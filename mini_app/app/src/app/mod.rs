@@ -3,7 +3,7 @@ use std::time;
 use common::result::{HttpError, HttpResult};
 use mini_runtime::{
     BoxedFutureWithError, create_server,
-    web::{conn::Conn, server::Server},
+    web::{conn::SharedTcpConn, server::Server},
 };
 
 use crate::{
@@ -53,7 +53,9 @@ pub fn create_app(
     ip: &str,
     port: usize,
     timeout: time::Duration,
-) -> HttpResult<Server<HttpError, impl Fn(Conn) -> BoxedFutureWithError<'static, (), HttpError>>> {
+) -> HttpResult<
+    Server<HttpError, impl Fn(SharedTcpConn) -> BoxedFutureWithError<'static, (), HttpError>>,
+> {
     let mut server = create_server!(ip, port, route_handler)?;
     server.update_timeout(|conn_timeout| {
         conn_timeout.update_timeout(timeout);

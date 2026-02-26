@@ -9,11 +9,11 @@ use common::{
 };
 use mini_runtime::{
     io_ext::read::{AsyncReader, TAsyncBufRead},
-    web::conn::_Conn,
+    web::conn::TcpConn,
 };
 use serde::de::DeserializeOwned;
 
-pub type ServerRequest = _ServerRequest<_Conn>;
+pub type ServerRequest = _ServerRequest<TcpConn>;
 
 pub struct _ServerRequest<R: TAsyncBufRead + 'static> {
     method: HttpMethod,

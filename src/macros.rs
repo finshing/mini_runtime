@@ -99,7 +99,6 @@ macro_rules! select {
         #[allow(unreachable_code)]
         #[allow(clippy::redundant_pattern_matching)]
         let output = $crate::helper::poll_fn(|mut cx| {
-            log::debug!("start select macro");
             // 任务索引
             let mut idx = 0usize;
             // 已就绪（Poll::Ready），但非预期结果的任务数量。用于全部就绪但无需要结果场景下的兜底
@@ -128,7 +127,6 @@ macro_rules! select {
                                     expect.replace($else);
                                 })?
 
-                                log::debug!("select expect: {:?}", expect);
                                 if let Some(expect) = expect {
                                     // 写入结果
                                     future_with_result.1.write(result);
@@ -156,14 +154,14 @@ macro_rules! select {
             log::debug!("all polled");
             // 全部任务就绪，但没有符合要求的结果
             if idx == unexpected {
-                log::debug!("all brach unexpected");
+                log::debug!("all branch unexpected");
                 return std::task::Poll::Ready(None);
             }
 
             return std::task::Poll::Pending;
         }).await;
 
-        log::debug!("select branch {:?}", output);
+        log::trace!("select branch {:?}", output);
         if let Some((idx, ok)) = output {
             // 通过索引找到需要执行的代码块
             let mut count = 0usize;

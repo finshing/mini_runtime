@@ -18,6 +18,8 @@ use crate::{
     result::{HttpError, HttpResult, InvalidUrl},
 };
 
+pub mod config;
+pub mod dto;
 pub mod helper;
 pub mod http_reader;
 pub mod http_writer;
@@ -253,17 +255,9 @@ impl UrlPath {
 
     pub fn set_params(&mut self, params: HashMap<String, String>) {
         let mut _params = self._params.borrow_mut();
-        // self._params.borrow_mut().
-        // let mut query_strings = Vec::new();
         for (k, v) in params.into_iter() {
             _params.insert(k, v);
-            // query_strings.push(format!(
-            //     "{}={}",
-            //     encode_query_string(k),
-            //     encode_query_string(v)
-            // ));
         }
-        // self.query_string = query_strings.join("&");
     }
 
     pub fn get_param(&self, key: &str) -> Option<String> {
@@ -294,7 +288,7 @@ impl Display for UrlPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.path)?;
         let _params = self._params.borrow();
-        if _params.is_empty() {
+        if !_params.is_empty() {
             write!(f, "?")?;
             let mut write_flag = false;
             for (k, v) in _params.iter() {

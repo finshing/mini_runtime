@@ -3,6 +3,7 @@ use std::{
     mem::MaybeUninit,
     pin::Pin,
     task::{Context, Poll},
+    time,
 };
 
 use crate::runtime::add_waker;
@@ -26,6 +27,29 @@ impl<T> UPSafeCell<T> {
 unsafe impl<T> Send for UPSafeCell<T> {}
 
 unsafe impl<T> Sync for UPSafeCell<T> {}
+
+pub struct TimerRecord {
+    start_at: time::Instant,
+}
+
+impl TimerRecord {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    pub fn info(&self, tag: &str) {
+        log::info!("{} cost {}ms", tag, self.start_at.elapsed().as_millis());
+    }
+}
+
+impl Default for TimerRecord {
+    fn default() -> Self {
+        Self {
+            start_at: time::Instant::now(),
+        }
+    }
+}
 
 /// 取出素银at之前的数据，并保留其后的数据
 /// let mut a = vec![1, 2, 3, 4];

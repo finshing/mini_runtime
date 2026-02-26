@@ -1,14 +1,8 @@
 use std::fs::read_dir;
 
-use common::result::HttpResult;
-use serde::Serialize;
+use common::{dto::ArticalListReqBody, result::HttpResult};
 
 use crate::{request::ServerRequest, response::ServerResponse, route::THttpMethodHandler};
-
-#[derive(Serialize)]
-struct ArticalList {
-    articles: Vec<String>,
-}
 
 pub struct ArticleListHandler {}
 
@@ -42,7 +36,11 @@ impl THttpMethodHandler for ArticleListHandler {
     ) -> Option<crate::HttpBoxedFuture<'_, ()>> {
         Some(Box::pin(async move {
             let articles = Self::load_artiles()?;
-            response.lock().await.json(&ArticalList { articles }).await
+            response
+                .lock()
+                .await
+                .json(&ArticalListReqBody::new(articles))
+                .await
         }))
     }
 }

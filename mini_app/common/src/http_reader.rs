@@ -87,10 +87,7 @@ impl<R: TAsyncBufRead> ChunkedBodyReader<R> {
     }
 
     async fn read_chunk(&mut self, chunk_length: usize) -> HttpResult<Vec<u8>> {
-        let mut body = Vec::new();
-        if chunk_length != 0 {
-            body = self.reader.read_exactly(chunk_length).await?;
-        }
+        let body = self.reader.read_exactly(chunk_length).await?;
         // 根据协议要求，body需要以CRLF结尾，因此这里需要完成分隔符的读取
         let crlf = self.reader.read_until(CRLF).await?;
         if chunk_length == 0 {

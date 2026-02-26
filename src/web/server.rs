@@ -1,7 +1,9 @@
 use core::time;
 
 use crate::{
-    BoxedFutureWithError, err_log,
+    BoxedFutureWithError,
+    dns::cache::open_dns_cache_refresh,
+    err_log,
     result::Result,
     runtime::spawn,
     select,
@@ -9,12 +11,12 @@ use crate::{
     sleep,
     tcp::listener::Listener,
     timeout::ConnTimeout,
-    web::conn::{Conn, new_conn},
+    web::conn::{SharedTcpConn, new_tcp_conn},
 };
 
 pub struct Server<E, H>
 where
-    H: Fn(Conn) -> BoxedFutureWithError<'static, (), E>,
+    H: Fn(SharedTcpConn) -> BoxedFutureWithError<'static, (), E>,
 {
     listener: Listener,
     conn_handler: H,
@@ -24,9 +26,10 @@ where
 
 impl<E, H> Server<E, H>
 where
-    H: Fn(Conn) -> BoxedFutureWithError<'static, (), E>,
+    H: Fn(SharedTcpConn) -> BoxedFutureWithError<'static, (), E>,
 {
     pub fn new(ip: &str, port: usize, conn_handler: H) -> Result<Self> {
+        open_dns_cache_refresh();
         Ok(Self {
             listener: Listener::new(ip, port)?,
             conn_handler,
@@ -73,7 +76,7 @@ where
                 Ok((tcp_stream, addr)) => {
                     log::debug!("build connection with {}", addr);
                     if let Ok(conn) = err_log!(
-                        new_conn(tcp_stream, self.timeout.clone()),
+                        new_tcp_conn(tcp_stream, self.timeout.clone()),
                         "Conn::new failed"
                     ) {
                         spawn((self.conn_handler)(conn));

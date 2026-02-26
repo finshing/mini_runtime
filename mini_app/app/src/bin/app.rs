@@ -1,7 +1,7 @@
 use core::time;
 
-use app::{app::create_app, config};
-use common::result::HttpResult;
+use app::app::create_app;
+use common::{config, result::HttpResult};
 
 #[rt_entry::main]
 async fn main() -> HttpResult<()> {
