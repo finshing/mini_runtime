@@ -22,6 +22,8 @@ lazy_static! {
     pub static ref RUNTIME: Runtime = Runtime::new().expect("init Runtime failed");
 }
 
+type FinishCb = Box<dyn FnOnce() + 'static>;
+
 pub struct Runtime {
     // 尚在运行中的任务
     _total_tasks: UPSafeCell<HashSet<TaskId>>,
@@ -30,6 +32,9 @@ pub struct Runtime {
     _ready_wakers: UPSafeCell<VecDeque<Waker>>,
 
     _poller: UPSafeCell<Poller>,
+
+    // 运行时结束时的善后处理
+    _finish_cb: UPSafeCell<Vec<FinishCb>>,
 }
 
 impl Runtime {
@@ -38,6 +43,7 @@ impl Runtime {
             _total_tasks: UPSafeCell::new(HashSet::new()),
             _ready_wakers: UPSafeCell::new(VecDeque::new()),
             _poller: UPSafeCell::new(Poller::new()?),
+            _finish_cb: UPSafeCell::new(Vec::new()),
         })
     }
 
@@ -46,12 +52,18 @@ impl Runtime {
         self._total_tasks.exclusive_access()
     }
 
+    #[inline]
     fn ready_wakers(&self) -> RefMut<'_, VecDeque<Waker>> {
         self._ready_wakers.exclusive_access()
     }
 
+    #[inline]
     fn poller(&self) -> RefMut<'_, Poller> {
         self._poller.exclusive_access()
+    }
+
+    fn finish_cb(&self) -> RefMut<'_, Vec<FinishCb>> {
+        self._finish_cb.exclusive_access()
     }
 }
 
@@ -78,7 +90,7 @@ pub fn spawn<F: Future>(f: F) {
 // 是否还存在运行中的任务。用于runtime的退出时判断
 pub(crate) fn can_finish() -> bool {
     let total_tasks_count =
-        variable_log!(debug @ RUNTIME.total_tasks().len(), "running tasks count");
+        variable_log!(trace @ RUNTIME.total_tasks().len(), "running tasks count");
     // 通过中断停止时，还会有一个最大等待时长的协程在执行
     if stopped() {
         total_tasks_count <= 1
@@ -132,4 +144,12 @@ pub(crate) fn deregister<S: mio::event::Source>(source: &mut S) -> Result<()> {
 
 pub(crate) fn force_stop() {
     RUNTIME.total_tasks().clear();
+}
+
+pub(crate) fn register_rt_finish_cb(cb: FinishCb) {
+    RUNTIME.finish_cb().push(cb);
+}
+
+pub(crate) fn take_finish_cbs() -> Vec<FinishCb> {
+    std::mem::take(&mut RUNTIME.finish_cb())
 }

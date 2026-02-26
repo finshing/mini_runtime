@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{net::SocketAddr, rc::Rc};
 
 use crate::{
     config::READ_BUF_SIZE,
@@ -13,24 +13,51 @@ use crate::{
     sync::mutex::AsyncMutex,
     tcp::stream::Stream,
     timeout::ConnTimeout,
+    udp::Udp,
 };
 
-pub type Conn = Rc<AsyncMutex<_Conn>>;
+pub type SharedTcpConn = Rc<AsyncMutex<TcpConn>>;
 
-pub fn new_conn(tcp_stream: mio::net::TcpStream, timeout: ConnTimeout) -> Result<Conn> {
-    Ok(Rc::new(AsyncMutex::new(_Conn::new(tcp_stream, timeout)?)))
+pub type TcpConn = _Conn<Stream>;
+
+pub type SharedUdpConn = Rc<AsyncMutex<UdpConn>>;
+
+pub type UdpConn = _Conn<Udp>;
+
+pub fn new_tcp_conn(
+    tcp_stream: mio::net::TcpStream,
+    timeout: ConnTimeout,
+) -> Result<SharedTcpConn> {
+    Ok(Rc::new(AsyncMutex::new(_Conn::<Stream>::tcp_conn(
+        tcp_stream, timeout,
+    )?)))
 }
 
-pub struct _Conn {
-    stream: Stream,
+pub fn new_udp_conn(server_addr: SocketAddr, timeout: ConnTimeout) -> Result<SharedUdpConn> {
+    Ok(Rc::new(AsyncMutex::new(_Conn::<Udp>::udp_conn(
+        server_addr,
+        timeout,
+    )?)))
+}
+
+pub struct _Conn<T: TAsyncRead + TAsyncWrite> {
+    inner: T,
     buf: Vec<u8>,
     timeout: ConnTimeout,
 }
 
-impl _Conn {
-    pub fn new(tcp_stream: mio::net::TcpStream, timeout: ConnTimeout) -> Result<Self> {
-        Ok(Self {
-            stream: Stream::new(tcp_stream)?,
+impl<T: TAsyncRead + TAsyncWrite> _Conn<T> {
+    fn tcp_conn(tcp_stream: mio::net::TcpStream, timeout: ConnTimeout) -> Result<TcpConn> {
+        Ok(_Conn {
+            inner: Stream::new(tcp_stream)?,
+            buf: Vec::new(),
+            timeout,
+        })
+    }
+
+    fn udp_conn(server_addr: SocketAddr, timeout: ConnTimeout) -> Result<UdpConn> {
+        Ok(_Conn {
+            inner: Udp::new(server_addr)?,
             buf: Vec::new(),
             timeout,
         })
@@ -47,7 +74,7 @@ impl _Conn {
     }
 }
 
-impl TAsyncRead for _Conn {
+impl<T: TAsyncRead + TAsyncWrite> TAsyncRead for _Conn<T> {
     fn ready_to_read(&mut self) -> crate::BoxedFuture<'_, ()> {
         Box::pin(async {
             select! {
@@ -57,7 +84,7 @@ impl TAsyncRead for _Conn {
                 _ = self.timeout.read_timeout() => {
                     return Err(ErrorType::ReadTimeout.into());
                 },
-                result = self.stream.ready_to_read() => {
+                result = self.inner.ready_to_read() => {
                     err_log!(result, ".ready_to_read() failed")?;
                 }
             }
@@ -67,11 +94,11 @@ impl TAsyncRead for _Conn {
     }
 
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        self.stream.read(buf)
+        self.inner.read(buf)
     }
 }
 
-impl TAsyncBufRead for _Conn {
+impl<T: TAsyncRead + TAsyncWrite> TAsyncBufRead for _Conn<T> {
     fn read_util<'a>(
         &'a mut self,
         read_while: impl Fn(&[u8]) -> Option<usize> + 'a,
@@ -94,7 +121,7 @@ impl TAsyncBufRead for _Conn {
     }
 }
 
-impl TAsyncWrite for _Conn {
+impl<T: TAsyncRead + TAsyncWrite> TAsyncWrite for _Conn<T> {
     fn ready_to_write(&mut self) -> crate::BoxedFuture<'_, ()> {
         Box::pin(async {
             select! {
@@ -104,7 +131,7 @@ impl TAsyncWrite for _Conn {
                 _ = self.timeout.write_timeout() => {
                     return Err(ErrorType::WriteTimeout.into());
                 },
-                result = self.stream.ready_to_write() => {
+                result = self.inner.ready_to_write() => {
                     err_log!(result, ".ready_to_write() failed")?;
                 }
             }
@@ -114,6 +141,6 @@ impl TAsyncWrite for _Conn {
     }
 
     fn write(&mut self, data: &[u8]) -> Result<usize> {
-        self.stream.write(data)
+        self.inner.write(data)
     }
 }

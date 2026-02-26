@@ -2,7 +2,7 @@ use mini_runtime::{
     config, create_server,
     io_ext::{read::AsyncReader, write::AsyncBufWriter},
     result::Result,
-    web::conn::Conn,
+    web::conn::SharedTcpConn,
 };
 
 #[rt_entry::main]
@@ -17,7 +17,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn echo_server_handler(conn: Conn) -> Result<()> {
+async fn echo_server_handler(conn: SharedTcpConn) -> Result<()> {
     let mut reader = AsyncReader::from(conn.clone());
     let buf_writer = AsyncBufWriter::from(conn.clone());
     loop {

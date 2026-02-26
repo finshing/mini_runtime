@@ -2,7 +2,7 @@ use crate::{
     io_ext::{read::AsyncReader, write::AsyncBufWriter},
     result::Result,
     timeout::ConnTimeout,
-    web::conn::{_Conn, Conn, new_conn},
+    web::conn::{SharedTcpConn, TcpConn, new_tcp_conn},
 };
 
 pub struct ClientBuilder {
@@ -26,21 +26,21 @@ impl ClientBuilder {
     pub fn connect(self) -> Result<Client> {
         let tcp_stream = mio::net::TcpStream::connect(self.host.parse()?)?;
         Ok(Client {
-            conn: new_conn(tcp_stream, self.timeout)?,
+            conn: new_tcp_conn(tcp_stream, self.timeout)?,
         })
     }
 }
 
 pub struct Client {
-    conn: Conn,
+    conn: SharedTcpConn,
 }
 
 impl Client {
-    pub fn writer(&self) -> AsyncBufWriter<_Conn> {
+    pub fn writer(&self) -> AsyncBufWriter<TcpConn> {
         self.conn.clone().into()
     }
 
-    pub fn reader(&self) -> AsyncReader<_Conn> {
+    pub fn reader(&self) -> AsyncReader<TcpConn> {
         self.conn.clone().into()
     }
 }

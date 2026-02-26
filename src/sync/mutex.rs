@@ -33,6 +33,10 @@ impl<T> AsyncMutex<T> {
         (&mut guard).await;
         guard
     }
+
+    pub(crate) unsafe fn get_mut(&self) -> &mut T {
+        unsafe { &mut *(self.data.get()) }
+    }
 }
 
 pub struct AsyncMutexGuard<'a, T> {

@@ -7,7 +7,7 @@ use mini_runtime::{
         write::{AsyncBufWriter, TAsyncWrite},
     },
     variable_log,
-    web::conn::Conn,
+    web::conn::SharedTcpConn,
 };
 
 use crate::{db::db_op, request::Request, response::Response, result::RedisResult};
@@ -42,7 +42,7 @@ pub(crate) async fn receive<R: TAsyncBufRead>(mut reader: AsyncReader<R>) -> Red
 }
 
 // 长连接
-pub async fn request_handler(conn: Conn) -> RedisResult<()> {
+pub async fn request_handler(conn: SharedTcpConn) -> RedisResult<()> {
     let handler = Handler { conn };
 
     loop {
@@ -61,7 +61,7 @@ pub async fn request_handler(conn: Conn) -> RedisResult<()> {
 }
 
 struct Handler {
-    conn: Conn,
+    conn: SharedTcpConn,
 }
 
 impl Handler {

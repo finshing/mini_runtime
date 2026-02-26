@@ -6,7 +6,7 @@ use mini_runtime::{
     io_ext::{read::AsyncReader, write::AsyncBufWriter},
     result::Result,
     sleep,
-    web::conn::Conn,
+    web::conn::SharedTcpConn,
 };
 
 #[rt_entry::main(log_level = "info")]
@@ -24,7 +24,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn handler(conn: Conn) -> Result<()> {
+async fn handler(conn: SharedTcpConn) -> Result<()> {
     let mut reader = AsyncReader::from(conn.clone());
     let buf_writer = AsyncBufWriter::from(conn.clone());
     let body = reader.read_until_exclusive(CRLF).await?;

@@ -71,6 +71,10 @@ impl<R: TAsyncBufRead> AsyncReader<R> {
     }
 
     pub async fn read_exactly(&mut self, size: usize) -> Result<Vec<u8>> {
+        if size == 0 {
+            return Ok(Vec::new());
+        }
+
         let mut reader = self.buf_reader.lock().await;
         loop {
             match reader
