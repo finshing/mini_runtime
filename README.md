@@ -12,6 +12,10 @@ Rust单线程异步运行时
 ## mini_app启动
 ```
 cd mini_app
-cargo run -p app
+cargo run -p app --release
 # 用浏览器打开localhost:9001/index网页
+
+# 也可以通过client请求
+# (在mini_app目录下)
+cargo run -p cli --release
 ```
