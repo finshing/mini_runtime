@@ -4,7 +4,6 @@
 #![feature(int_from_ascii)]
 
 use std::{
-    borrow::Cow,
     cell::RefCell,
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -200,8 +199,8 @@ impl Display for HttpScheme {
 // 请求地址
 #[derive(Debug)]
 pub struct Domain {
-    pub domain: String,
-    pub port: Option<usize>,
+    pub host: String,
+    pub port: Option<u16>,
 }
 
 impl Domain {
@@ -212,18 +211,10 @@ impl Domain {
             .next()
             .map(slice_to_str)
             .transpose()?
-            .map(|p| p.parse::<usize>())
+            .map(|p| p.parse::<u16>())
             .transpose()?;
 
-        Ok(Self { domain, port })
-    }
-
-    pub fn host(&self) -> Cow<'_, str> {
-        if let Some(port) = self.port {
-            format!("{}:{}", self.domain, port).into()
-        } else {
-            self.domain.as_str().into()
-        }
+        Ok(Self { host: domain, port })
     }
 }
 

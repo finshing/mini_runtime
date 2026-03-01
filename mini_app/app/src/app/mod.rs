@@ -51,7 +51,7 @@ fn init_route() {
 
 pub fn create_app(
     ip: &str,
-    port: usize,
+    port: u16,
     timeout: time::Duration,
 ) -> HttpResult<
     Server<HttpError, impl Fn(SharedTcpConn) -> BoxedFutureWithError<'static, (), HttpError>>,

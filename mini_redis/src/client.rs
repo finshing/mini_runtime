@@ -7,9 +7,9 @@ pub struct RedisClient {
 }
 
 impl RedisClient {
-    pub fn new(ip: &str, port: usize) -> RedisResult<Self> {
+    pub async fn new(ip: &str, port: u16) -> RedisResult<Self> {
         Ok(Self {
-            client: ClientBuilder::new(ip, port).connect()?,
+            client: ClientBuilder::new(ip, port).connect().await?,
         })
     }
 

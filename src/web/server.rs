@@ -28,7 +28,7 @@ impl<E, H> Server<E, H>
 where
     H: Fn(SharedTcpConn) -> BoxedFutureWithError<'static, (), E>,
 {
-    pub fn new(ip: &str, port: usize, conn_handler: H) -> Result<Self> {
+    pub fn new(ip: &str, port: u16, conn_handler: H) -> Result<Self> {
         open_dns_cache_refresh();
         Ok(Self {
             listener: Listener::new(ip, port)?,

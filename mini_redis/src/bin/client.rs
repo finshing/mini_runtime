@@ -6,7 +6,7 @@ async fn main() -> RedisResult<()> {
 }
 
 async fn client_run() -> RedisResult<()> {
-    let client = RedisClient::new(config::REDIS_SERVER_IP, config::REDIS_SERVER_PORT)?;
+    let client = RedisClient::new(config::REDIS_SERVER_IP, config::REDIS_SERVER_PORT).await?;
 
     query(&client, Request::Get("rust".to_owned())).await?;
     query(

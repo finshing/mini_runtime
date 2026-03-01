@@ -25,7 +25,9 @@ async fn main() -> Result<()> {
 #[allow(unused)]
 async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
     let start_at = time::Instant::now();
-    let client = ClientBuilder::new(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT).connect()?;
+    let client = ClientBuilder::new(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)
+        .connect()
+        .await?;
     client
         .writer()
         .lock()
@@ -48,7 +50,9 @@ async fn call(dur: i64, _guard: WaitGroupGuard<'_>) -> Result<()> {
 
 #[allow(unused)]
 async fn call2(times: usize, _guard: WaitGroupGuard<'_>) -> Result<()> {
-    let client = ClientBuilder::new(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT).connect()?;
+    let client = ClientBuilder::new(config::ECHO_SERVER_IP, config::ECHO_SERVER_PORT)
+        .connect()
+        .await?;
     let writer = client.writer();
     let mut reader = client.reader();
     let mut size = 0usize;

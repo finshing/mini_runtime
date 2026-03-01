@@ -12,7 +12,7 @@ pub struct Listener {
 }
 
 impl Listener {
-    pub fn new(ip: &str, port: usize) -> Result<Self> {
+    pub fn new(ip: &str, port: u16) -> Result<Self> {
         let host = format!("{}:{}", ip, port);
         let mut tcp_listener = mio::net::TcpListener::bind(host.parse()?)?;
         let io_event = IoEvent::new();
