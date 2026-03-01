@@ -25,6 +25,7 @@ impl CompletionHandler {
             .url()
             .get_param("article")
             .unwrap_or(DEFAULT_ARTICLE.to_owned());
+        log::info!("asked article: {}", article);
 
         let content = load_file(format!("./static/text/{}.txt", article).as_str());
         let content = match content {

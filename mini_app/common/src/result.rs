@@ -1,4 +1,4 @@
-use crate::http_parse_error;
+use crate::{HttpStatus, http_parse_error};
 
 pub type HttpResult<T> = std::result::Result<T, HttpError>;
 
@@ -30,6 +30,7 @@ pub enum HttpError {
     InvalidHeader,
     // 不完整的消息体，比方长度和Content_Length不一致
     InvalidBody(InvalidBody),
+    ResponseError(HttpStatus, String),
     Eof,
     // 连接关闭
     Closed,

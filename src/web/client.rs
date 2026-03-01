@@ -1,4 +1,5 @@
 use crate::{
+    dns::dns_parse,
     io_ext::{read::AsyncReader, write::AsyncBufWriter},
     result::Result,
     timeout::ConnTimeout,
@@ -7,13 +8,15 @@ use crate::{
 
 pub struct ClientBuilder {
     host: String,
+    port: u16,
     timeout: ConnTimeout,
 }
 
 impl ClientBuilder {
-    pub fn new(ip: &str, port: usize) -> Self {
+    pub fn new(host: &str, port: u16) -> Self {
         Self {
-            host: format!("{}:{}", ip, port),
+            host: host.to_owned(),
+            port,
             timeout: ConnTimeout::new(None),
         }
     }
@@ -23,8 +26,9 @@ impl ClientBuilder {
         self
     }
 
-    pub fn connect(self) -> Result<Client> {
-        let tcp_stream = mio::net::TcpStream::connect(self.host.parse()?)?;
+    pub async fn connect(self) -> Result<Client> {
+        let addr = dns_parse(&self.host, self.port).await?;
+        let tcp_stream = mio::net::TcpStream::connect(addr)?;
         Ok(Client {
             conn: new_tcp_conn(tcp_stream, self.timeout)?,
         })

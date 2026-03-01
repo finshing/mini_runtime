@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time};
 
-use cli::request::HttpClient;
+use cli::request::new_client;
 use common::{
     CT_EVENT_STREAM,
     dto::{ArticalListReqBody, BadResponse, SSEContent},
@@ -12,10 +12,9 @@ use mini_runtime::{TimerRecord, err_log};
 #[rt_entry::main]
 async fn main() -> HttpResult<()> {
     let timer_record = TimerRecord::new();
-    let mut client = HttpClient::default();
-    // get_home(&mut client).await?;
-    // post_article_list(&mut client).await?;
-    completion(&mut client).await?;
+    // get_home().await?;
+    post_article_list().await?;
+    completion().await?;
     timer_record.info("client request");
     Ok(())
 }
@@ -30,7 +29,8 @@ fn url(path: &str) -> String {
 }
 
 #[allow(unused)]
-async fn get_home(client: &mut HttpClient) -> HttpResult<()> {
+async fn get_home() -> HttpResult<()> {
+    let mut client = new_client();
     let response = client.set_url(url("/home"))?.get(None).await?;
     log::info!("get /home status: {}", response.status());
     let body = response.body_reader().read().await?;
@@ -43,7 +43,8 @@ async fn get_home(client: &mut HttpClient) -> HttpResult<()> {
 }
 
 #[allow(unused)]
-async fn post_article_list(client: &mut HttpClient) -> HttpResult<()> {
+async fn post_article_list() -> HttpResult<()> {
+    let mut client = new_client();
     let mut response = client.set_url(url("/article_list"))?.post(&[]).await?;
     log::info!("get /article_list status: {}", response.status());
     let body = response.json::<ArticalListReqBody>().await?;
@@ -52,7 +53,8 @@ async fn post_article_list(client: &mut HttpClient) -> HttpResult<()> {
 }
 
 #[allow(unused)]
-async fn completion(client: &mut HttpClient) -> HttpResult<()> {
+async fn completion() -> HttpResult<()> {
+    let mut client = new_client();
     let mut response = client
         .set_url(url("/completion"))?
         .update_timeout(|timeout| {

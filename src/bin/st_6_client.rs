@@ -20,7 +20,8 @@ async fn a() -> Result<()> {
                 .update_timeout(time::Duration::from_secs(10))
                 .set_read_timeout(time::Duration::from_secs(5));
         })
-        .connect()?;
+        .connect()
+        .await?;
     sleep(time::Duration::from_millis(3000)).await;
 
     client

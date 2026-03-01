@@ -11,3 +11,8 @@ log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 memchr.workspace = true
+
+[features]
+tcp = []
+mock = []
+default = ["tcp"]
